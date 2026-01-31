@@ -4,6 +4,12 @@ export interface LocationRate {
   rate: number; // Stawka za tonę (Przelicznik)
 }
 
+export interface Driver {
+  id: string;
+  name: string;
+  code: string; // Unikalny kod logowania
+}
+
 export interface Trip {
   id: string;
   locationId: string;
@@ -16,7 +22,23 @@ export interface Trip {
 
 export enum DayType {
   WORK = 'WORK',
-  VACATION = 'URLOP'
+  VACATION = 'URLOP',
+  SICK_LEAVE = 'L4'
+}
+
+export interface AppSettings {
+  vacationRateOld: number; // Stara stawka za urlop (np. 210)
+  vacationRateNew: number; // Nowa stawka za urlop (np. 230)
+  sickLeaveRate: number; // Stawka za L4 (domyślnie 150)
+  hourlyRate: number; // Stawka godzinowa (domyślnie 4.5)
+  workshopRate: number; // Stawka za warsztat (domyślnie 10)
+  waitingRate: number; // Stawka za postój (domyślnie 8)
+  
+  totalVacationDays: number; // Łączna pula dni urlopu (np. 30)
+  vacationDaysLimit: number; // Limit nowego urlopu (domyślnie 26)
+  
+  googleScriptUrl?: string; // URL do Google Apps Script (opcjonalne w settings, bo teraz jest w kodzie)
+  driverId?: string; // ID zalogowanego kierowcy
 }
 
 export interface WorkDay {

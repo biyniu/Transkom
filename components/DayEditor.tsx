@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, Save, ArrowLeft, Clock, Search, X, Wrench, Hourglass } from 'lucide-react';
-import { WorkDay, DayType, LocationRate, Trip } from '../types';
+import { Plus, Trash2, Save, ArrowLeft, Clock, Search, X, Wrench, Hourglass, Thermometer } from 'lucide-react';
+import { WorkDay, DayType, LocationRate, Trip, AppSettings } from '../types';
 import * as StorageService from '../services/storage';
 
 interface DayEditorProps {
@@ -11,7 +11,12 @@ interface DayEditorProps {
 
 const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
   const [locations, setLocations] = useState<LocationRate[]>([]);
+  const [settings, setSettings] = useState<AppSettings>(StorageService.getSettings());
   
+  // Local UI states to keep inputs visible even if value is 0 during typing
+  const [showWorkshop, setShowWorkshop] = useState(false);
+  const [showWaiting, setShowWaiting] = useState(false);
+
   const [day, setDay] = useState<WorkDay>({
     id: uuidv4(),
     date: new Date().toISOString().slice(0, 10),
@@ -33,9 +38,19 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
 
   useEffect(() => {
     setLocations(StorageService.getLocations());
+    setSettings(StorageService.getSettings());
     if (dayId) {
       const existingDay = StorageService.getDayById(dayId);
-      if (existingDay) setDay(existingDay);
+      if (existingDay) {
+        setDay(existingDay);
+        // Initialize toggles based on existing data
+        setShowWorkshop((existingDay.workshopHours || 0) > 0);
+        setShowWaiting((existingDay.waitingHours || 0) > 0);
+      }
+    } else {
+        // Reset toggles for new day
+        setShowWorkshop(false);
+        setShowWaiting(false);
     }
   }, [dayId]);
 
@@ -88,23 +103,39 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
   };
 
   const handleSave = () => {
-    StorageService.saveDay(day);
+    // Clean up values before saving if toggles are off
+    const dayToSave = { ...day };
+    if (!showWorkshop) {
+        dayToSave.workshopHours = 0;
+        dayToSave.totalWorkshop = 0;
+    }
+    if (!showWaiting) {
+        dayToSave.waitingHours = 0;
+        dayToSave.totalWaiting = 0;
+        dayToSave.waitingNote = '';
+    }
+
+    StorageService.saveDay(dayToSave);
     onClose();
   };
 
   const toggleWorkshop = () => {
-    if (day.workshopHours && day.workshopHours > 0) {
-      setDay({ ...day, workshopHours: 0 });
+    const newState = !showWorkshop;
+    setShowWorkshop(newState);
+    if (newState) {
+      setDay({ ...day, workshopHours: 1 }); // Default to 1h when enabled
     } else {
-      setDay({ ...day, workshopHours: 1 });
+      setDay({ ...day, workshopHours: 0 });
     }
   };
 
   const toggleWaiting = () => {
-    if (day.waitingHours && day.waitingHours > 0) {
-      setDay({ ...day, waitingHours: 0, waitingNote: '' });
+    const newState = !showWaiting;
+    setShowWaiting(newState);
+    if (newState) {
+      setDay({ ...day, waitingHours: 1 }); // Default to 1h when enabled
     } else {
-      setDay({ ...day, waitingHours: 1 });
+      setDay({ ...day, waitingHours: 0, waitingNote: '' });
     }
   };
 
@@ -153,7 +184,8 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                 className="w-full p-3 border border-slate-300 rounded-lg bg-gray-50 font-medium text-slate-700"
               >
                 <option value={DayType.WORK}>Praca (Kursy)</option>
-                <option value={DayType.VACATION}>Urlop (210 zł)</option>
+                <option value={DayType.VACATION}>Urlop</option>
+                <option value={DayType.SICK_LEAVE}>L4 ({settings.sickLeaveRate} zł)</option>
               </select>
             </div>
           </div>
@@ -186,7 +218,14 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
         {day.type === DayType.VACATION && (
           <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-xl text-yellow-800 text-sm flex items-center gap-2">
             <Clock size={18} />
-            Dla urlopu naliczana jest stała stawka <strong>210 PLN</strong>.
+            Stawka za urlop zostanie przeliczona automatycznie wg puli (Stary/Nowy).
+          </div>
+        )}
+
+        {day.type === DayType.SICK_LEAVE && (
+          <div className="bg-purple-50 border border-purple-200 p-4 rounded-xl text-purple-800 text-sm flex items-center gap-2">
+            <Thermometer size={18} />
+            Dla L4 naliczana jest stała stawka <strong>{settings.sickLeaveRate} PLN</strong>.
           </div>
         )}
 
@@ -198,28 +237,32 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                 <label className="flex items-center gap-3 cursor-pointer">
                     <input 
                     type="checkbox" 
-                    checked={(day.workshopHours || 0) > 0}
+                    checked={showWorkshop}
                     onChange={toggleWorkshop}
                     className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
                     />
                     <div className="flex items-center gap-2 text-slate-700 font-medium">
                     <Wrench size={18} className="text-slate-500" />
-                    Warsztat / Naprawa (10 zł/h)
+                    Warsztat / Naprawa ({settings.workshopRate} zł/h)
                     </div>
                 </label>
                 
-                {day.workshopHours !== undefined && day.workshopHours > 0 && (
+                {showWorkshop && (
                     <div className="mt-2 pl-8 animate-fade-in">
                         <div className="flex items-center gap-2">
                             <input 
                             type="number"
                             step="0.5"
-                            value={day.workshopHours}
-                            onChange={e => setDay({...day, workshopHours: parseFloat(e.target.value) || 0})}
+                            value={day.workshopHours === 0 ? '' : day.workshopHours}
+                            placeholder="0"
+                            onChange={e => {
+                                const val = parseFloat(e.target.value);
+                                setDay({...day, workshopHours: isNaN(val) ? 0 : val});
+                            }}
                             className="w-24 p-2 border border-slate-300 rounded-lg text-center font-bold"
                             />
                             <span className="text-slate-500 font-medium">h = </span>
-                            <span className="text-green-600 font-bold">{(day.workshopHours * 10).toFixed(2)} zł</span>
+                            <span className="text-green-600 font-bold">{((day.workshopHours || 0) * settings.workshopRate).toFixed(2)} zł</span>
                         </div>
                     </div>
                 )}
@@ -232,28 +275,32 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                 <label className="flex items-center gap-3 cursor-pointer">
                     <input 
                     type="checkbox" 
-                    checked={(day.waitingHours || 0) > 0}
+                    checked={showWaiting}
                     onChange={toggleWaiting}
                     className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
                     />
                     <div className="flex items-center gap-2 text-slate-700 font-medium">
                     <Hourglass size={18} className="text-slate-500" />
-                    Oczekiwanie na załad./rozład. (8 zł/h)
+                    Oczekiwanie na załad./rozład. ({settings.waitingRate} zł/h)
                     </div>
                 </label>
                 
-                {day.waitingHours !== undefined && day.waitingHours > 0 && (
+                {showWaiting && (
                     <div className="mt-2 pl-8 space-y-2 animate-fade-in">
                         <div className="flex items-center gap-2">
                             <input 
                             type="number"
                             step="0.5"
-                            value={day.waitingHours}
-                            onChange={e => setDay({...day, waitingHours: parseFloat(e.target.value) || 0})}
+                            value={day.waitingHours === 0 ? '' : day.waitingHours}
+                            placeholder="0"
+                            onChange={e => {
+                                const val = parseFloat(e.target.value);
+                                setDay({...day, waitingHours: isNaN(val) ? 0 : val});
+                            }}
                             className="w-24 p-2 border border-slate-300 rounded-lg text-center font-bold"
                             />
                             <span className="text-slate-500 font-medium">h = </span>
-                            <span className="text-green-600 font-bold">{(day.waitingHours * 8).toFixed(2)} zł</span>
+                            <span className="text-green-600 font-bold">{((day.waitingHours || 0) * settings.waitingRate).toFixed(2)} zł</span>
                         </div>
                         <input 
                            type="text"
@@ -318,13 +365,13 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                 <span>Premia Paliwo (20%): {totals.totalBonus.toFixed(2)} zł</span>
              </div>
              <div className="flex justify-between text-sm text-slate-300">
-                <span>Godziny: {(totals.totalHourlyBonus / 4.5).toFixed(1)} h (+ {totals.totalHourlyBonus.toFixed(2)} zł)</span>
+                <span>Godziny: {(totals.totalHourlyBonus / settings.hourlyRate).toFixed(1)} h (+ {totals.totalHourlyBonus.toFixed(2)} zł)</span>
                 {/* Simplified Extras display */}
                 <div className="text-right">
-                    {totals.totalWorkshop && totals.totalWorkshop > 0 ? (
+                    {showWorkshop && totals.totalWorkshop > 0 ? (
                         <span className="block text-orange-300 text-xs">Warsztat: {totals.totalWorkshop.toFixed(2)} zł</span>
                     ) : null}
-                    {totals.totalWaiting && totals.totalWaiting > 0 ? (
+                    {showWaiting && totals.totalWaiting > 0 ? (
                         <span className="block text-yellow-300 text-xs">Oczekiwanie: {totals.totalWaiting.toFixed(2)} zł</span>
                     ) : null}
                 </div>

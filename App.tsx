@@ -1,21 +1,72 @@
-import React, { useState } from 'react';
-import { Home, PlusCircle, Settings, MapPin, FileText } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Home, PlusCircle, Settings as SettingsIcon, MapPin, FileText } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import DayEditor from './components/DayEditor';
 import LocationsManager from './components/LocationsManager';
 import MonthlySummary from './components/MonthlySummary';
+import Settings from './components/Settings';
+import Login from './components/Login';
+import AdminPanel from './components/AdminPanel';
+import * as StorageService from './services/storage';
+import * as ApiService from './services/api';
 
 enum View {
   DASHBOARD = 'DASHBOARD',
   EDITOR = 'EDITOR',
   LOCATIONS = 'LOCATIONS',
-  SUMMARY = 'SUMMARY'
+  SUMMARY = 'SUMMARY',
+  SETTINGS = 'SETTINGS'
 }
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.DASHBOARD);
   const [editingDayId, setEditingDayId] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    // Check login status
+    const settings = StorageService.getSettings();
+    if (settings.driverId) {
+      setIsLoggedIn(true);
+      initializeData(settings.driverId);
+    }
+  }, []);
+
+  const initializeData = async (driverId: string) => {
+    setIsLoading(true);
+    // 1. Fetch Locations (Global)
+    const locations = await ApiService.fetchLocations();
+    if (locations) {
+        StorageService.saveLocations(locations);
+    }
+    // 2. Fetch Driver Data
+    const days = await ApiService.fetchDriverData(driverId);
+    if (days) {
+        StorageService.saveWorkDays(days);
+        setRefreshTrigger(prev => prev + 1);
+    }
+    setIsLoading(false);
+  };
+
+  const handleLogin = () => {
+    const settings = StorageService.getSettings();
+    setIsLoggedIn(true);
+    if (settings.driverId) {
+        initializeData(settings.driverId);
+    }
+  };
+
+  const handleLogout = () => {
+    if (confirm("Czy na pewno chcesz się wylogować?")) {
+        const settings = StorageService.getSettings();
+        settings.driverId = undefined;
+        StorageService.saveSettings(settings);
+        setIsLoggedIn(false);
+    }
+  };
 
   const handleOpenEditor = (dayId?: string) => {
     setEditingDayId(dayId || null);
@@ -28,8 +79,25 @@ const App: React.FC = () => {
     setRefreshTrigger(prev => prev + 1);
   };
 
+  if (!isLoggedIn) {
+    return <Login onLogin={handleLogin} />;
+  }
+
   return (
-    <div className="h-[100dvh] w-full flex flex-col bg-slate-50 text-slate-900 font-sans overflow-hidden">
+    <div className="h-[100dvh] w-full flex flex-col bg-slate-50 text-slate-900 font-sans overflow-hidden relative">
+      
+      {/* Loading Overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 z-[60] bg-white/80 backdrop-blur-sm flex items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      )}
+
+      {/* Admin Panel Overlay */}
+      {showAdmin && (
+          <AdminPanel onClose={() => setShowAdmin(false)} />
+      )}
+
       <main className="flex-1 overflow-hidden relative flex flex-col min-h-0">
         {currentView === View.DASHBOARD && (
           <div className="flex-1 overflow-y-auto min-h-0">
@@ -42,10 +110,29 @@ const App: React.FC = () => {
           </div>
         )}
         {currentView === View.LOCATIONS && (
-          <LocationsManager />
+          // View-Only Locations List (Admin manages it via Settings)
+          <div className="flex-1 overflow-y-auto p-4">
+              <div className="bg-white p-4 shadow-sm border-b border-slate-200 z-10 sticky top-0 mb-4">
+                 <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                   <MapPin size={20} className="text-primary"/> Baza Miejscowości
+                 </h2>
+                 <p className="text-xs text-slate-500">Tylko do odczytu. Edycja w panelu Administratora.</p>
+              </div>
+              <ul className="bg-white rounded-xl shadow-sm border border-slate-100 divide-y divide-slate-100">
+                  {StorageService.getLocations().map(loc => (
+                      <li key={loc.id} className="p-3 pl-4 flex justify-between items-center">
+                          <span className="font-semibold text-slate-800 text-sm">{loc.name}</span>
+                          <span className="font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">{loc.rate.toFixed(2)} zł</span>
+                      </li>
+                  ))}
+              </ul>
+          </div>
         )}
         {currentView === View.SUMMARY && (
           <MonthlySummary />
+        )}
+        {currentView === View.SETTINGS && (
+          <Settings onOpenAdmin={() => setShowAdmin(true)} onLogout={handleLogout} />
         )}
       </main>
 
@@ -57,7 +144,7 @@ const App: React.FC = () => {
             className={`flex flex-col items-center p-2 rounded-xl transition ${currentView === View.DASHBOARD ? 'text-primary bg-blue-50' : 'text-slate-400'}`}
           >
             <Home size={24} />
-            <span className="text-xs font-medium mt-1">Start</span>
+            <span className="text-[10px] font-medium mt-1">Start</span>
           </button>
           
           <button 
@@ -65,14 +152,7 @@ const App: React.FC = () => {
              className={`flex flex-col items-center p-2 rounded-xl transition ${currentView === View.SUMMARY ? 'text-primary bg-blue-50' : 'text-slate-400'}`}
           >
             <FileText size={24} />
-            <span className="text-xs font-medium mt-1">Raport</span>
-          </button>
-
-          <button 
-            onClick={() => handleOpenEditor()}
-            className="flex flex-col items-center justify-center -mt-8 bg-primary text-white rounded-full w-14 h-14 shadow-lg shadow-blue-300 active:scale-95 transition-transform"
-          >
-            <PlusCircle size={32} />
+            <span className="text-[10px] font-medium mt-1">Raport</span>
           </button>
 
           <button 
@@ -80,7 +160,15 @@ const App: React.FC = () => {
             className={`flex flex-col items-center p-2 rounded-xl transition ${currentView === View.LOCATIONS ? 'text-primary bg-blue-50' : 'text-slate-400'}`}
           >
             <MapPin size={24} />
-            <span className="text-xs font-medium mt-1">Baza</span>
+            <span className="text-[10px] font-medium mt-1">Baza</span>
+          </button>
+
+          <button 
+            onClick={() => setCurrentView(View.SETTINGS)}
+            className={`flex flex-col items-center p-2 rounded-xl transition ${currentView === View.SETTINGS ? 'text-primary bg-blue-50' : 'text-slate-400'}`}
+          >
+            <SettingsIcon size={24} />
+            <span className="text-[10px] font-medium mt-1">Opcje</span>
           </button>
         </nav>
       )}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { Truck, Clock, Calculator, Wallet, Calendar, ChevronDown, Wrench, Hourglass, FileDown } from 'lucide-react';
+import { Truck, Clock, Calculator, Wallet, Calendar, ChevronDown, Wrench, Hourglass, FileDown, Info } from 'lucide-react';
 import { WorkDay, DayType } from '../types';
 import * as StorageService from '../services/storage';
 import { jsPDF } from "jspdf";
@@ -13,6 +13,14 @@ const removeDiacritics = (str: string) => {
     .normalize('NFD').replace(/[\u0300-\u036f]/g, "")
     .replace(/ł/g, 'l').replace(/Ł/g, 'L');
 };
+
+interface ExtraEvent {
+  date: string;
+  type: 'WARSZTAT' | 'POSTÓJ';
+  note: string;
+  hours: number;
+  amount: number;
+}
 
 const MonthlySummary: React.FC = () => {
   const [days, setDays] = useState<WorkDay[]>([]);
@@ -34,6 +42,7 @@ const MonthlySummary: React.FC = () => {
     daysWorked: 0
   });
   const [locationStats, setLocationStats] = useState<any[]>([]);
+  const [extraEvents, setExtraEvents] = useState<ExtraEvent[]>([]);
 
   useEffect(() => {
     const allDays = StorageService.getWorkDays();
@@ -65,6 +74,9 @@ const MonthlySummary: React.FC = () => {
     let totalTrips = 0;
     let daysWorked = 0;
 
+    // For Extra Events List
+    const extras: ExtraEvent[] = [];
+
     filteredDays.forEach(day => {
       // Sum totals regardless of day type (Urlop adds to earnings too)
       baseEarnings += day.totalAmount; 
@@ -72,11 +84,31 @@ const MonthlySummary: React.FC = () => {
       hourlyBonus += (day.totalHourlyBonus || 0);
       
       // Detailed extras
-      workshopHours += (day.workshopHours || 0);
-      workshopMoney += (day.totalWorkshop || 0);
+      if (day.workshopHours && day.workshopHours > 0) {
+        workshopHours += day.workshopHours;
+        const amount = day.totalWorkshop || 0;
+        workshopMoney += amount;
+        extras.push({
+            date: day.date,
+            type: 'WARSZTAT',
+            note: 'Naprawa / Serwis',
+            hours: day.workshopHours,
+            amount: amount
+        });
+      }
 
-      waitingHours += (day.waitingHours || 0);
-      waitingMoney += (day.totalWaiting || 0);
+      if (day.waitingHours && day.waitingHours > 0) {
+        waitingHours += day.waitingHours;
+        const amount = day.totalWaiting || 0;
+        waitingMoney += amount;
+        extras.push({
+            date: day.date,
+            type: 'POSTÓJ',
+            note: day.waitingNote || 'Brak opisu',
+            hours: day.waitingHours,
+            amount: amount
+        });
+      }
 
       totalTons += day.totalWeight;
       
@@ -85,6 +117,10 @@ const MonthlySummary: React.FC = () => {
         daysWorked++;
       }
     });
+
+    // Sort extras by date descending
+    extras.sort((a, b) => b.date.localeCompare(a.date));
+    setExtraEvents(extras);
 
     setStats({
       baseEarnings,
@@ -141,8 +177,8 @@ const MonthlySummary: React.FC = () => {
     
     const summaryData = [
       ["Podstawa (Kursy/Urlop)", `${stats.baseEarnings.toFixed(2)} zl`],
-      ["Premia Paliwowa (20%)", `${stats.fuelBonus.toFixed(2)} zl`],
-      ["Godziny (4.5 zl/h)", `${stats.hourlyBonus.toFixed(2)} zl`],
+      ["Premia Paliwowa (Prognozowane 20%)", `${stats.fuelBonus.toFixed(2)} zl`],
+      ["Premia Godzinowa", `${stats.hourlyBonus.toFixed(2)} zl`],
       [`Warsztat (${stats.workshopHours}h)`, `${stats.workshopMoney.toFixed(2)} zl`],
       [`Postoj (${stats.waitingHours}h)`, `${stats.waitingMoney.toFixed(2)} zl`],
       ["-----------------", "----------"],
@@ -159,10 +195,10 @@ const MonthlySummary: React.FC = () => {
     });
 
     // Locations Table
-    const finalY = (doc as any).lastAutoTable.finalY || 100;
+    let finalY = (doc as any).lastAutoTable.finalY || 100;
     
     doc.setFontSize(14);
-    doc.text(removeDiacritics("Szczegoly Miejscowosci"), 14, finalY + 15);
+    doc.text(removeDiacritics("Miejscowosci (Kursy)"), 14, finalY + 15);
 
     const tableRows = locationStats.map(loc => [
       removeDiacritics(loc.name),
@@ -184,6 +220,36 @@ const MonthlySummary: React.FC = () => {
         3: { halign: 'right' }
       }
     });
+
+    // Extra Events Table (Workshop/Waiting)
+    if (extraEvents.length > 0) {
+        finalY = (doc as any).lastAutoTable.finalY || 100;
+        doc.setFontSize(14);
+        doc.text(removeDiacritics("Szczegoly: Warsztat i Postoj"), 14, finalY + 15);
+
+        const extraRows = extraEvents.map(ev => [
+            ev.date,
+            removeDiacritics(ev.type),
+            removeDiacritics(ev.note),
+            `${ev.hours}h`,
+            `${ev.amount.toFixed(2)} zl`
+        ]);
+
+        autoTable(doc, {
+            startY: finalY + 20,
+            head: [[removeDiacritics('Data'), removeDiacritics('Typ'), removeDiacritics('Opis'), removeDiacritics('Czas'), removeDiacritics('Kwota')]],
+            body: extraRows,
+            theme: 'grid',
+            headStyles: { fillColor: [234, 179, 8] }, // Yellow-ish
+            columnStyles: { 
+                0: { cellWidth: 25 }, 
+                1: { cellWidth: 25 }, 
+                2: { cellWidth: 'auto' },
+                3: { cellWidth: 20, halign: 'center' },
+                4: { cellWidth: 30, halign: 'right' }
+            }
+        });
+    }
 
     // Footer Stats
     const finalY2 = (doc as any).lastAutoTable.finalY || 150;
@@ -241,7 +307,7 @@ const MonthlySummary: React.FC = () => {
                 <div className="font-bold text-slate-700 text-lg">{stats.baseEarnings.toFixed(0)} zł</div>
              </div>
              <div className="bg-blue-50 p-2 rounded-lg border border-blue-100">
-                <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wide">Premia 20%</div>
+                <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wide">Premia Paliwowa (Prognozowane 20%)</div>
                 <div className="font-bold text-blue-700 text-lg">{stats.fuelBonus.toFixed(0)} zł</div>
              </div>
          </div>
@@ -249,7 +315,7 @@ const MonthlySummary: React.FC = () => {
          {/* Hourly & Extras */}
          <div className="grid grid-cols-3 gap-2">
             <div className="bg-orange-50 p-2 rounded-lg border border-orange-100 text-center">
-                <div className="text-[10px] font-bold text-orange-400 uppercase tracking-wide mb-1">Jazda 4.5</div>
+                <div className="text-[10px] font-bold text-orange-400 uppercase tracking-wide mb-1">Premia Godzinowa</div>
                 <div className="font-bold text-orange-700">{stats.hourlyBonus.toFixed(0)} zł</div>
             </div>
             
@@ -277,21 +343,21 @@ const MonthlySummary: React.FC = () => {
       </div>
 
       {/* 3. THE LIST (Fills rest of screen) */}
-      <div className="flex-1 overflow-hidden relative bg-slate-50 flex flex-col">
-          {/* List Header */}
-          <div className="grid grid-cols-12 bg-slate-100 text-[10px] font-bold text-slate-500 uppercase py-2 px-4 border-b border-slate-200 sticky top-0 z-10">
-             <div className="col-span-6">Miejscowość / Tony</div>
-             <div className="col-span-2 text-center">Ilość</div>
-             <div className="col-span-4 text-right">Zarobek</div>
-          </div>
+      <div className="flex-1 overflow-y-auto bg-slate-50 pb-24">
           
-          {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto pb-24"> 
-            {locationStats.length === 0 ? (
-                 <div className="p-10 text-center text-slate-400 flex flex-col items-center justify-center h-64">
-                    <Truck size={48} className="mb-4 opacity-20" />
-                    <p>Brak danych w tym miesiącu</p>
-                 </div>
+          {/* A. Locations Section */}
+          <div>
+            <div className="grid grid-cols-12 bg-slate-100 text-[10px] font-bold text-slate-500 uppercase py-2 px-4 border-b border-slate-200 sticky top-0 z-10">
+                <div className="col-span-6">Miejscowość / Tony</div>
+                <div className="col-span-2 text-center">Ilość</div>
+                <div className="col-span-4 text-right">Zarobek</div>
+            </div>
+            
+            {locationStats.length === 0 && extraEvents.length === 0 ? (
+                    <div className="p-10 text-center text-slate-400 flex flex-col items-center justify-center h-64">
+                        <Truck size={48} className="mb-4 opacity-20" />
+                        <p>Brak danych w tym miesiącu</p>
+                    </div>
             ) : (
                 <div className="divide-y divide-slate-100 bg-white">
                     {locationStats.map((loc, idx) => (
@@ -314,14 +380,48 @@ const MonthlySummary: React.FC = () => {
                     ))}
                 </div>
             )}
-            
-            {/* Footer Summary in list */}
-            {locationStats.length > 0 && (
-                <div className="p-6 bg-slate-50 text-center text-xs text-slate-400 border-t border-slate-200">
-                    Łącznie wykonano: {stats.totalTrips} kursów
-                </div>
-            )}
           </div>
+
+          {/* B. Extra Events Section (Warsztat / Postój) */}
+          {extraEvents.length > 0 && (
+            <div className="mt-6 border-t border-slate-200">
+                 <div className="bg-yellow-50 text-[10px] font-bold text-yellow-700 uppercase py-2 px-4 border-b border-yellow-100 sticky top-0 z-10 flex items-center gap-2">
+                    <Info size={14}/> Szczegóły: Warsztat i Postój
+                 </div>
+                 <div className="divide-y divide-slate-100 bg-white">
+                    {extraEvents.map((ev, idx) => (
+                        <div key={idx} className="p-4 hover:bg-yellow-50 transition-colors">
+                             <div className="flex justify-between items-start mb-1">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-mono font-bold text-slate-400">{format(parseISO(ev.date), 'dd.MM')}</span>
+                                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${ev.type === 'WARSZTAT' ? 'bg-purple-100 text-purple-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                        {ev.type}
+                                    </span>
+                                </div>
+                                <div className="text-right">
+                                    <span className="font-bold text-slate-700">{ev.amount.toFixed(2)} zł</span>
+                                </div>
+                             </div>
+                             <div className="flex justify-between items-end">
+                                <div className="text-sm text-slate-600 leading-snug max-w-[75%]">
+                                    {ev.note}
+                                </div>
+                                <div className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">
+                                    {ev.hours} h
+                                </div>
+                             </div>
+                        </div>
+                    ))}
+                 </div>
+            </div>
+          )}
+          
+          {/* Footer Summary in list */}
+          {(locationStats.length > 0 || extraEvents.length > 0) && (
+              <div className="p-6 bg-slate-50 text-center text-xs text-slate-400 border-t border-slate-200">
+                  Łącznie wykonano: {stats.totalTrips} kursów
+              </div>
+          )}
       </div>
 
     </div>
