@@ -4,7 +4,7 @@ import { pl } from 'date-fns/locale';
 import { Edit2, Trash2, TrendingUp, Calendar, Briefcase, Truck, Wrench, Hourglass, Plus, PlusCircle, Thermometer, Palmtree, ChevronLeft, ChevronRight } from 'lucide-react';
 import { WorkDay, DayType } from '../types';
 import * as StorageService from '../services/storage';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Cell, LabelList } from 'recharts';
 
 interface DashboardProps {
   onEditDay: (id: string) => void;
@@ -202,7 +202,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
           >
              <div style={{ width: `${chartWidth}px`, height: '100%' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <BarChart data={chartData} margin={{ top: 25, right: 10, left: -25, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     <XAxis 
                         dataKey="name" 
@@ -218,17 +218,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                         tickLine={false}
                         tickFormatter={(value) => `${value}`}
                     />
-                    <Tooltip 
-                        cursor={{fill: '#f1f5f9'}}
-                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                        labelFormatter={(label, payload) => {
-                             // Use date from payload if available for correct year context
-                             if (payload && payload[0]) return format(parseISO(payload[0].payload.fullDate), 'd MMMM (EEEE)', { locale: pl });
-                             return label;
-                        }}
-                        formatter={(value: number) => [`${value} zł`, 'Zarobek']}
-                    />
                     <Bar dataKey="zarobek" radius={[4, 4, 0, 0]} barSize={32}>
+                        <LabelList 
+                            dataKey="zarobek" 
+                            position="top" 
+                            fontSize={11} 
+                            fontWeight="bold"
+                            fill="#64748b"
+                            formatter={(value: number) => value > 0 ? value : ''}
+                        />
                         {chartData.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={getBarColor(entry.type, entry.isToday)} />
                         ))}
