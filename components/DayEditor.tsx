@@ -66,6 +66,12 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
         if (loc) {
           newTrip.locationName = loc.name;
           newTrip.rate = loc.rate;
+
+          // LOGIC CHANGE: If rate > 10, assume it's a fixed price per trip, not per ton.
+          // Force weight/quantity to 1.
+          if (loc.rate > 10) {
+            newTrip.weight = 1;
+          }
         }
       }
 
@@ -423,6 +429,9 @@ const TripCard: React.FC<{
     onChange('locationId', ''); // Clear current selection
   };
 
+  // Check if fixed rate (lump sum)
+  const isFixedRate = trip.rate > 10;
+
   return (
     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 relative">
       <div className="grid grid-cols-12 gap-3">
@@ -474,13 +483,16 @@ const TripCard: React.FC<{
         </div>
 
         <div className="col-span-4">
-          <label className="block text-xs font-medium text-slate-500 mb-1">Tony / Ilość</label>
+          <label className="block text-xs font-medium text-slate-500 mb-1">
+             {isFixedRate ? 'Ryczałt' : 'Tony'}
+          </label>
           <input 
             type="number" 
             step="0.1"
             value={trip.weight || ''}
             onChange={(e) => onChange('weight', parseFloat(e.target.value) || 0)}
-            className="w-full p-2 border border-slate-300 rounded-lg font-mono bg-gray-50"
+            disabled={isFixedRate}
+            className={`w-full p-2 border border-slate-300 rounded-lg font-mono ${isFixedRate ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-gray-50'}`}
             placeholder="0"
           />
         </div>
