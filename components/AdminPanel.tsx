@@ -89,7 +89,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onClose }) => {
             </div>
 
             <div className="flex-1 relative overflow-hidden">
-                {activeTab === 'LOCATIONS' ? <LocationsManager /> : <DriversManager />}
+                {activeTab === 'LOCATIONS' ? <LocationsManager mode="ADMIN" /> : <DriversManager />}
             </div>
         </div>
     );

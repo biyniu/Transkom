@@ -7,6 +7,7 @@ import MonthlySummary from './components/MonthlySummary';
 import Settings from './components/Settings';
 import Login from './components/Login';
 import AdminPanel from './components/AdminPanel';
+import InstallPrompt from './components/InstallPrompt';
 import * as StorageService from './services/storage';
 import * as ApiService from './services/api';
 
@@ -80,12 +81,20 @@ const App: React.FC = () => {
   };
 
   if (!isLoggedIn) {
-    return <Login onLogin={handleLogin} />;
+    return (
+        <>
+            <Login onLogin={handleLogin} />
+            <InstallPrompt />
+        </>
+    );
   }
 
   return (
     <div className="h-[100dvh] w-full flex flex-col bg-slate-50 text-slate-900 font-sans overflow-hidden relative">
       
+      {/* Install Prompt (Shows only if criteria met) */}
+      <InstallPrompt />
+
       {/* Loading Overlay */}
       {isLoading && (
         <div className="absolute inset-0 z-[60] bg-white/80 backdrop-blur-sm flex items-center justify-center">
@@ -110,22 +119,9 @@ const App: React.FC = () => {
           </div>
         )}
         {currentView === View.LOCATIONS && (
-          // View-Only Locations List (Admin manages it via Settings)
-          <div className="flex-1 overflow-y-auto p-4">
-              <div className="bg-white p-4 shadow-sm border-b border-slate-200 z-10 sticky top-0 mb-4">
-                 <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                   <MapPin size={20} className="text-primary"/> Baza Miejscowości
-                 </h2>
-                 <p className="text-xs text-slate-500">Tylko do odczytu. Edycja w panelu Administratora.</p>
-              </div>
-              <ul className="bg-white rounded-xl shadow-sm border border-slate-100 divide-y divide-slate-100">
-                  {StorageService.getLocations().map(loc => (
-                      <li key={loc.id} className="p-3 pl-4 flex justify-between items-center">
-                          <span className="font-semibold text-slate-800 text-sm">{loc.name}</span>
-                          <span className="font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">{loc.rate.toFixed(2)} zł</span>
-                      </li>
-                  ))}
-              </ul>
+          // Driver View: Can ADD but NOT Edit
+          <div className="flex-1 overflow-hidden">
+             <LocationsManager mode="DRIVER" />
           </div>
         )}
         {currentView === View.SUMMARY && (
