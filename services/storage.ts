@@ -219,7 +219,9 @@ export const calculateDayTotals = (day: WorkDay): WorkDay => {
   let totalHourlyBonus = 0;
 
   // Hourly Bonus: Hours * Rate
-  if (day.startTime && day.endTime) {
+  // FIX: Only calculate if endTime is explicitly different than default "04:00"
+  // This prevents calculation of ~23h if user changes Start to 04:40 but leaves End at 04:00.
+  if (day.startTime && day.endTime && day.endTime !== '04:00') {
      const hours = calculateDurationHours(day.startTime, day.endTime);
      totalHourlyBonus = hours * settings.hourlyRate;
   }

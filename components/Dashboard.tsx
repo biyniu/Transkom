@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { Edit2, Trash2, TrendingUp, Calendar, Briefcase, Truck, Wrench, Hourglass, Plus, PlusCircle, Thermometer, Palmtree, ChevronLeft, ChevronRight } from 'lucide-react';
+import { TrendingUp, Calendar, Briefcase, Truck, Wrench, Hourglass, Plus, PlusCircle, Thermometer, Palmtree, Trash2, Edit } from 'lucide-react';
 import { WorkDay, DayType } from '../types';
 import * as StorageService from '../services/storage';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Cell, LabelList } from 'recharts';
@@ -18,7 +18,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
   
   // 0 = Current Month, 1 = Previous Month
   const [historyOffset, setHistoryOffset] = useState(0); 
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const data = StorageService.getWorkDays();
@@ -62,17 +61,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
         remaining: settings.totalVacationDays - usedVacation
     });
 
-    // Auto-scroll to end if it's current month (to see today)
-    if (historyOffset === 0 && scrollContainerRef.current) {
-        setTimeout(() => {
-            if (scrollContainerRef.current) {
-                scrollContainerRef.current.scrollLeft = scrollContainerRef.current.scrollWidth;
-            }
-        }, 100);
-    } else if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollLeft = 0;
-    }
-
   }, [refreshTrigger, historyOffset]);
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
@@ -112,9 +100,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
       };
   });
 
-  // Calculate dynamic width: e.g. 50px per day. Min width 100% of container.
-  const chartWidth = Math.max(300, daysInMonth * 45);
-
   const getBarColor = (type?: DayType, isToday?: boolean) => {
       if (isToday) return '#f59e0b'; // Amber for Today
       if (type === DayType.VACATION) return '#16a34a'; // green-600
@@ -135,6 +120,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
   
   const displayedMonthName = format(targetDate, 'LLLL yyyy', { locale: pl });
   const isCurrentMonth = historyOffset === 0;
+
+  // Logic for "Today's Shortcut"
+  const todayDateStr = new Date().toISOString().slice(0, 10);
+  const todayEntry = days.find(d => d.date === todayDateStr && d.type === DayType.WORK);
 
   return (
     <div className="p-4 space-y-6 pb-24">
@@ -190,17 +179,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
         </div>
       </div>
 
-      {/* Scrollable Chart */}
+      {/* Static Chart (No Horizontal Scroll) */}
       <div className="bg-white p-4 pb-2 rounded-xl shadow-sm border border-slate-100 h-72 flex flex-col">
           <h3 className="text-sm font-bold text-slate-500 mb-4 flex-none uppercase tracking-wide text-center">
             Wykres: {displayedMonthName}
           </h3>
-          <div 
-            className="flex-1 w-full min-h-0 overflow-x-auto overflow-y-hidden relative custom-scrollbar" 
-            ref={scrollContainerRef}
-            style={{ WebkitOverflowScrolling: 'touch' }} // Smooth scroll on iOS
-          >
-             <div style={{ width: `${chartWidth}px`, height: '100%' }}>
+          <div className="flex-1 w-full min-h-0">
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData} margin={{ top: 25, right: 10, left: -25, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -233,24 +217,38 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                     </Bar>
                     </BarChart>
                 </ResponsiveContainer>
-             </div>
-          </div>
-          <div className="text-[10px] text-center text-slate-300 mt-2 font-medium">
-             Przesuń palcem, aby zobaczyć więcej dni
           </div>
       </div>
 
-      {/* NEW DAY BUTTON */}
+      {/* SHORTCUT: Add Trip to TODAY (Only if today exists and is WORK) - LARGE GREEN BUTTON */}
+      {isCurrentMonth && todayEntry && (
+        <button
+            onClick={() => onEditDay(todayEntry.id)}
+            className="w-full py-5 bg-green-600 text-white rounded-2xl shadow-xl shadow-green-200/50 flex flex-col items-center justify-center gap-1 active:scale-95 transition-all transform border border-green-500 relative overflow-hidden group"
+        >
+            <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+            
+            <div className="flex items-center gap-2">
+                <Plus size={32} strokeWidth={3} />
+                <span className="text-xl font-black uppercase tracking-wide">Dodaj kolejny kurs</span>
+            </div>
+            <span className="text-sm font-medium text-green-100">
+                Dzisiaj, {format(parseISO(todayEntry.date), 'd MMMM', { locale: pl })}
+            </span>
+        </button>
+      )}
+
+      {/* NEW DAY BUTTON (Smaller than the green one) */}
       {isCurrentMonth && (
           <button 
             onClick={() => onEditDay('')}
-            className="w-full py-4 bg-primary text-white rounded-xl shadow-lg shadow-blue-200 flex flex-col items-center justify-center active:scale-98 transition-transform group"
+            className="w-full py-3 bg-white text-primary border-2 border-blue-100 rounded-xl shadow-sm flex flex-col items-center justify-center active:scale-98 transition-transform group"
           >
-            <div className="flex items-center gap-2 mb-1">
-                <PlusCircle size={28} className="group-hover:scale-110 transition-transform"/>
-                <span className="text-lg font-bold uppercase tracking-wide">Dodaj NOWY dzień</span>
+            <div className="flex items-center gap-2 mb-0.5">
+                <PlusCircle size={24} className="group-hover:scale-110 transition-transform"/>
+                <span className="text-base font-bold uppercase tracking-wide">Dodaj NOWY dzień</span>
             </div>
-            <span className="text-xs text-blue-100 opacity-80">Rozpocznij nowy wpis pracy, urlopu lub L4</span>
+            <span className="text-[10px] text-slate-400">Rozpocznij nowy wpis pracy, urlopu lub L4</span>
           </button>
       )}
 

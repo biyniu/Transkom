@@ -160,7 +160,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
         </h2>
         <button 
           onClick={handleSave} 
-          className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg font-medium shadow hover:bg-blue-700 transition"
+          className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-medium shadow hover:bg-green-700 transition"
         >
           <Save size={18} />
           <span>Zapisz</span>
@@ -344,6 +344,14 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                 className="w-full py-4 rounded-xl bg-primary text-white text-lg font-bold shadow-md shadow-blue-200 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
               >
                 <Plus size={24} /> Dodaj kurs
+              </button>
+
+             {/* Big Save Button */}
+             <button 
+                onClick={handleSave}
+                className="w-full py-4 rounded-xl bg-green-600 text-white text-lg font-bold shadow-md shadow-green-200 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+              >
+                <Save size={24} /> Zapisz i zamknij
               </button>
           </section>
         )}

@@ -144,7 +144,7 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
             onClick={openAddForm}
             className="bg-primary text-white px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm hover:bg-blue-700 transition active:scale-95 text-sm font-medium"
           >
-            <Plus size={16} /> Dodaj Nowy
+            <Plus size={16} /> Dodaj Nowy Kurs
           </button>
         </div>
       </div>
@@ -179,13 +179,13 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
                  <div className="flex gap-2 border-b border-blue-200 pb-0">
                     <button 
                         onClick={() => setInfoTab('RULES')}
-                        className={`flex-1 py-2 text-xs font-bold transition-colors border-b-2 ${infoTab === 'RULES' ? 'text-blue-700 border-blue-600' : 'text-slate-400 border-transparent hover:text-slate-600'}`}
+                        className={`flex-1 py-2 text-xs font-bold transition-all rounded-t-lg border-b-2 ${infoTab === 'RULES' ? 'bg-blue-100 text-blue-800 border-blue-600' : 'text-blue-600 border-transparent hover:bg-blue-50'}`}
                     >
                         <span className="flex items-center justify-center gap-1"><Info size={14}/> Zasady nazewnictwa</span>
                     </button>
                     <button 
                         onClick={() => setInfoTab('TABLE')}
-                        className={`flex-1 py-2 text-xs font-bold transition-colors border-b-2 ${infoTab === 'TABLE' ? 'text-blue-700 border-blue-600' : 'text-slate-400 border-transparent hover:text-slate-600'}`}
+                        className={`flex-1 py-2 text-xs font-bold transition-all rounded-t-lg border-b-2 ${infoTab === 'TABLE' ? 'bg-green-100 text-green-800 border-green-600' : 'text-green-600 border-transparent hover:bg-green-50'}`}
                     >
                          <span className="flex items-center justify-center gap-1"><TableProperties size={14}/> Tabela stawek</span>
                     </button>
@@ -193,7 +193,7 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
 
                  {/* Tab Content: RULES */}
                  {infoTab === 'RULES' && (
-                    <div className="text-xs text-slate-700 animate-fade-in">
+                    <div className="text-xs text-slate-700 animate-fade-in bg-blue-50/50 p-2 rounded-b-lg">
                         <ul className="space-y-2 mt-2">
                             <li className="flex flex-col">
                                 <span className="font-semibold text-slate-900">1. Z kopalni Szymiszów:</span>
@@ -211,7 +211,7 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
                                 <span className="text-slate-500 italic">Np: Chruszczobród - Katowice DOMBUD</span>
                             </li>
                         </ul>
-                        <div className="bg-blue-100 p-2 rounded text-blue-900 font-bold text-center mt-3">
+                        <div className="bg-blue-200 p-2 rounded text-blue-900 font-bold text-center mt-3 border border-blue-300">
                             NAZWĘ FIRMY PISZEMY ZAWSZE DUŻYMI LITERAMI NA KOŃCU
                         </div>
                     </div>
@@ -219,25 +219,25 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
 
                  {/* Tab Content: TABLE (COMPACT VERSION) */}
                  {infoTab === 'TABLE' && (
-                     <div className="animate-fade-in">
-                        <div className="text-[10px] text-slate-500 mb-2 italic text-center">
-                            Wybierz przedział kilometrowy
+                     <div className="animate-fade-in bg-green-50/50 p-2 rounded-b-lg">
+                        <div className="text-[10px] text-green-700 mb-2 italic text-center font-medium">
+                            Wybierz przedział kilometrowy, aby ustalić stawkę
                         </div>
-                        <div className="max-h-56 overflow-y-auto rounded border border-slate-200">
+                        <div className="max-h-56 overflow-y-auto rounded border border-green-200">
                             <table className="w-full text-xs">
-                                <thead className="bg-slate-100 text-slate-600 font-bold sticky top-0 z-10 shadow-sm">
+                                <thead className="bg-green-100 text-green-800 font-bold sticky top-0 z-10 shadow-sm">
                                     <tr>
-                                        <th className="p-2 border-b border-slate-200 text-center w-1/2">Dystans (km)</th>
-                                        <th className="p-2 border-b border-slate-200 text-center w-1/2 bg-blue-50 text-blue-800">Stawka</th>
+                                        <th className="p-2 border-b border-green-200 text-center w-1/2">Dystans (km)</th>
+                                        <th className="p-2 border-b border-green-200 text-center w-1/2 bg-green-200">Stawka</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100 bg-white">
+                                <tbody className="divide-y divide-green-100 bg-white">
                                     {RATE_TABLE_DATA.map((row, idx) => (
-                                        <tr key={idx} className="hover:bg-slate-50">
-                                            <td className="p-2 text-center text-slate-600 font-medium border-r border-slate-50">
+                                        <tr key={idx} className="hover:bg-green-50">
+                                            <td className="p-2 text-center text-slate-600 font-medium border-r border-green-50">
                                                 {row.min} - {row.max}
                                             </td>
-                                            <td className="p-2 text-center font-bold text-blue-700 bg-blue-50/30">
+                                            <td className="p-2 text-center font-bold text-green-700 bg-green-50/30">
                                                 {row.rate}
                                             </td>
                                         </tr>
