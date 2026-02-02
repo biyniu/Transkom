@@ -108,6 +108,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
       return '#e2e8f0'; // slate-200 (empty days)
   };
 
+  // Calculate Chart Width (e.g., 50px per day ensures it's scrollable)
+  const chartWidth = Math.max(daysInMonth * 55, window.innerWidth - 40);
+
   // Filter History List based on toggle
   const getHistoryDays = () => {
     return days.filter(d => {
@@ -179,18 +182,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
         </div>
       </div>
 
-      {/* Static Chart (No Horizontal Scroll) */}
-      <div className="bg-white p-4 pb-2 rounded-xl shadow-sm border border-slate-100 h-72 flex flex-col">
-          <h3 className="text-sm font-bold text-slate-500 mb-4 flex-none uppercase tracking-wide text-center">
+      {/* Scrollable Chart */}
+      <div className="bg-white p-4 pb-2 rounded-xl shadow-sm border border-slate-100 flex flex-col">
+          <h3 className="text-sm font-bold text-slate-500 mb-2 flex-none uppercase tracking-wide text-center">
             Wykres: {displayedMonthName}
           </h3>
-          <div className="flex-1 w-full min-h-0">
+          <div className="overflow-x-auto pb-2 -mx-2 px-2">
+            <div style={{ width: `${chartWidth}px`, height: '280px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData} margin={{ top: 25, right: 10, left: -25, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     <XAxis 
                         dataKey="name" 
-                        fontSize={10} 
+                        fontSize={11} 
                         tickLine={false} 
                         axisLine={false} 
                         dy={10}
@@ -202,7 +206,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                         tickLine={false}
                         tickFormatter={(value) => `${value}`}
                     />
-                    <Bar dataKey="zarobek" radius={[4, 4, 0, 0]} barSize={32}>
+                    <Bar dataKey="zarobek" radius={[6, 6, 0, 0]} barSize={36}>
                         <LabelList 
                             dataKey="zarobek" 
                             position="top" 
@@ -217,6 +221,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                     </Bar>
                     </BarChart>
                 </ResponsiveContainer>
+            </div>
           </div>
       </div>
 
@@ -289,7 +294,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
+                  
+                  {/* Right Side: Money + Delete Button */}
+                  <div className="flex flex-col items-end gap-1">
                     {day.type === DayType.WORK ? (
                       <>
                         <div className="font-bold text-green-600">
@@ -302,6 +309,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                         {day.type} (+{day.totalAmount} zł)
                       </div>
                     )}
+
+                    {/* Visible Delete Button under the amount */}
+                    <button 
+                      onClick={(e) => handleDelete(day.id, e)} 
+                      className="mt-1 p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 active:scale-95 transition-all shadow-sm border border-red-100"
+                      title="Usuń dzień"
+                    >
+                      <Trash2 size={16}/>
+                    </button>
                   </div>
                 </div>
                 
@@ -333,14 +349,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                   )}
                   </>
                 )}
-                
-                {/* Delete button (positioned absolute top right for better access) */}
-                <button 
-                  onClick={(e) => handleDelete(day.id, e)} 
-                  className="absolute top-2 right-2 p-2 text-slate-300 hover:text-danger hover:bg-red-50 rounded-full transition-colors z-10"
-                >
-                  <Trash2 size={16}/>
-                </button>
               </div>
             ))
           )}
