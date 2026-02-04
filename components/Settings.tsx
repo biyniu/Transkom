@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Settings as SettingsIcon, RotateCcw, Info, Lock, Cloud, LogOut } from 'lucide-react';
+import { Save, Settings as SettingsIcon, RotateCcw, Info, Lock, Cloud, LogOut, RefreshCw, Calculator } from 'lucide-react';
 import * as StorageService from '../services/storage';
 import * as ApiService from '../services/api';
 import { AppSettings } from '../types';
@@ -29,6 +29,19 @@ const Settings: React.FC<SettingsProps> = ({ onOpenAdmin, onLogout }) => {
       ...prev,
       [key]: isNaN(numValue) ? 0 : numValue
     }));
+  };
+
+  // Logic to refresh historical data (Same as in Admin Panel but accessible here)
+  const handleGlobalRateRefresh = () => {
+    if (confirm("Ta opcja zaktualizuje stawki we wszystkich Twoich kursach z obecnego i poprzedniego miesiąca na podstawie aktualnej bazy miejscowości.\n\nCzy kontynuować?")) {
+        const count = StorageService.updateRecentHistoryRates();
+        if (count > 0) {
+            setMessage(`Zaktualizowano ${count} dni pracy!`);
+        } else {
+            setMessage('Twoje kursy mają już aktualne stawki.');
+        }
+        setTimeout(() => setMessage(''), 3000);
+    }
   };
 
   const oldVacationDays = Math.max(0, settings.totalVacationDays - settings.vacationDaysLimit);
@@ -85,6 +98,26 @@ const Settings: React.FC<SettingsProps> = ({ onOpenAdmin, onLogout }) => {
             {!isConnected && (
                 <div className="text-[10px] text-red-400 mt-1">Brak konfiguracji URL Google Script</div>
             )}
+        </div>
+
+        {/* --- NOWA SEKCJA: NARZĘDZIA --- */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-4">
+           <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide border-b border-slate-100 pb-2">Narzędzia</h3>
+           
+           <div className="flex items-center justify-between gap-4">
+               <div className="text-sm text-slate-600">
+                   <div className="font-bold text-slate-800">Aktualizacja Stawek</div>
+                   <div className="text-xs text-slate-400 mt-1">
+                       Użyj, jeśli Administrator zmienił ceny, a Ty chcesz przeliczyć swoje stare kursy (2 msc wstecz).
+                   </div>
+               </div>
+               <button 
+                  onClick={handleGlobalRateRefresh}
+                  className="bg-indigo-50 text-indigo-600 p-3 rounded-xl hover:bg-indigo-100 active:scale-95 transition-transform border border-indigo-100 shadow-sm"
+               >
+                   <RefreshCw size={20} />
+               </button>
+           </div>
         </div>
 
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-4">
