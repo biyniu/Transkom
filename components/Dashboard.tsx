@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { TrendingUp, Calendar, Briefcase, Truck, Wrench, Hourglass, Plus, PlusCircle, Thermometer, Palmtree, Trash2, Edit } from 'lucide-react';
+import { TrendingUp, Calendar, Briefcase, Truck, Wrench, Hourglass, Plus, PlusCircle, Thermometer, Palmtree, Trash2, Edit, Moon } from 'lucide-react';
 import { WorkDay, DayType } from '../types';
 import * as StorageService from '../services/storage';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Cell, LabelList } from 'recharts';
@@ -69,6 +69,50 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
       StorageService.deleteDay(id);
       setDays(StorageService.getWorkDays());
     }
+  };
+
+  // Helper to calculate rest time relative to previous work day
+  const getRestTimeBadge = (currentDay: WorkDay) => {
+    if (currentDay.type !== DayType.WORK) return null;
+
+    // Filter all work days except current, sort descending
+    const otherWorkDays = days
+        .filter(d => d.type === DayType.WORK && d.id !== currentDay.id)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const currentDayDate = new Date(currentDay.date);
+    
+    // Find previous day strictly before current
+    const prevDay = otherWorkDays.find(d => new Date(d.date) < currentDayDate);
+    if (!prevDay) return null;
+
+    // Calculate timestamps
+    let prevEndDate = new Date(`${prevDay.date}T${prevDay.endTime}`);
+    const prevStartDate = new Date(`${prevDay.date}T${prevDay.startTime}`);
+    
+    // Handle overnight logic (if End <= Start, it means next day)
+    if (prevEndDate <= prevStartDate) {
+        prevEndDate.setDate(prevEndDate.getDate() + 1);
+    }
+
+    const currentStart = new Date(`${currentDay.date}T${currentDay.startTime}`);
+    
+    const diffMs = currentStart.getTime() - prevEndDate.getTime();
+    if (diffMs < 0) return null; // Overlap or error
+
+    const diffMins = Math.floor(diffMs / 1000 / 60);
+    const hours = Math.floor(diffMins / 60);
+    const mins = diffMins % 60;
+
+    let colorClass = "bg-green-100 text-green-700"; // > 11h
+    if (hours < 9) colorClass = "bg-red-100 text-red-700";
+    else if (hours < 11) colorClass = "bg-orange-100 text-orange-700";
+
+    return (
+        <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${colorClass}`} title="Odpoczynek dobowy">
+            <Moon size={10} /> {hours}h {mins}m
+        </span>
+    );
   };
 
   // --- PREPARE CHART DATA (Full Selected Month) ---
@@ -289,8 +333,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                       <div className="font-bold text-slate-700">
                         {format(parseISO(day.date), 'd MMMM', { locale: pl })}
                       </div>
-                      <div className="text-xs text-slate-400">
-                        {day.type === DayType.WORK ? `${day.startTime} - ${day.endTime}` : day.type}
+                      <div className="text-xs text-slate-400 flex flex-wrap gap-2 mt-0.5">
+                        {day.type === DayType.WORK ? (
+                            <>
+                                <span>{day.startTime} - {day.endTime}</span>
+                                {getRestTimeBadge(day)}
+                            </>
+                        ) : (
+                            day.type
+                        )}
                       </div>
                     </div>
                   </div>

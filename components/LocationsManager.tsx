@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Trash2, Plus, Download, Upload, Save, X, Edit2, Database, Lock, Info, TableProperties } from 'lucide-react';
+import { Trash2, Plus, Download, Upload, Save, X, Edit2, Database, Lock, Info, TableProperties, RefreshCw } from 'lucide-react';
 import { LocationRate } from '../types';
 import * as StorageService from '../services/storage';
 
@@ -127,6 +127,19 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
     }
   };
 
+  // Logic to refresh historical data
+  const handleGlobalRateRefresh = () => {
+    if (confirm("Czy na pewno chcesz zaktualizować stawki i nazwy we WSZYSTKICH kursach z obecnego i poprzedniego miesiąca?")) {
+        const count = StorageService.updateRecentHistoryRates();
+        if (count > 0) {
+            setMessage(`Zaktualizowano ${count} dni pracy!`);
+        } else {
+            setMessage('Wszystkie dni są już aktualne.');
+        }
+        setTimeout(() => setMessage(''), 3000);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-slate-50">
       
@@ -140,12 +153,26 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
             <p className="text-xs text-slate-500">Ilość pozycji: {locations.length}</p>
           </div>
           
-          <button 
-            onClick={openAddForm}
-            className="bg-primary text-white px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm hover:bg-blue-700 transition active:scale-95 text-sm font-medium"
-          >
-            <Plus size={16} /> Dodaj Nowy Kurs
-          </button>
+          <div className="flex gap-2">
+            {/* NEW REFRESH BUTTON - ADMIN ONLY */}
+            {mode === 'ADMIN' && (
+                <button 
+                  onClick={handleGlobalRateRefresh}
+                  className="bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm hover:bg-indigo-200 transition active:scale-95 text-xs font-bold"
+                  title="Odśwież stawki (Obecny i Poprzedni miesiąc)"
+                >
+                  <RefreshCw size={16} /> 
+                  <span className="hidden sm:inline">Odśwież (Obecny+Poprzedni)</span>
+                </button>
+            )}
+
+            <button 
+              onClick={openAddForm}
+              className="bg-primary text-white px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm hover:bg-blue-700 transition active:scale-95 text-xs font-bold"
+            >
+              <Plus size={16} /> Dodaj Nowy
+            </button>
+          </div>
         </div>
       </div>
 

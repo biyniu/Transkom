@@ -16,8 +16,7 @@ const InstallPrompt: React.FC = () => {
     if (hasSeenPrompt) return;
 
     // 3. Detect iOS
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
+    const isIosDevice = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
     setIsIOS(isIosDevice);
 
     // 4. Capture native install event (Android/Desktop)

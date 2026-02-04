@@ -12,27 +12,29 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // On mount, check local data
+    // On mount, ALWAYS try to sync drivers.
+    // This fixes the iOS PWA issue where standalone app has empty storage 
+    // and doesn't know about drivers added in Safari.
     useEffect(() => {
-        const localDrivers = StorageService.getDrivers();
-        
-        // Auto-sync only if empty
-        if (localDrivers.length === 0) {
-            syncDrivers();
-        }
+        syncDrivers();
     }, []);
 
     const syncDrivers = async () => {
         setIsLoading(true);
         setError('');
         
+        // 1. Try to fetch from Cloud
         const fetchedDrivers = await ApiService.fetchDrivers();
         
         if (fetchedDrivers) {
+            // Success: Update local storage
             StorageService.saveDrivers(fetchedDrivers, false);
         } else {
+            // Failure: Check if we have anything locally
             const localDrivers = StorageService.getDrivers();
             if (localDrivers.length === 0) {
+                 // Only show error if we have ABSOLUTELY no data to work with
+                 // If we have local data (offline mode), we just stay silent
                  setError('Błąd połączenia z bazą Google. Sprawdź URL w services/api.ts');
             }
         }
@@ -42,6 +44,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     const handleLogin = () => {
         if (!accessCode) return;
 
+        // Reload from storage to ensure we have latest after sync
         const drivers = StorageService.getDrivers();
         const foundDriver = drivers.find(d => d.code === accessCode.trim());
 
@@ -105,17 +108,18 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         disabled={isLoading}
                         className="w-full bg-primary text-white py-4 rounded-xl font-bold shadow-lg shadow-blue-200 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-70 disabled:scale-100"
                     >
-                       <LogIn size={20} /> Zaloguj się
+                       <LogIn size={20} /> 
+                       {isLoading ? 'Sprawdzanie...' : 'Zaloguj się'}
                     </button>
                     
-                    {/* Manual Sync Button (Silent) */}
+                    {/* Manual Sync Button */}
                     <button 
                         onClick={syncDrivers}
                         disabled={isLoading}
                         className="w-full py-2 text-slate-400 hover:text-slate-600 text-xs font-bold flex items-center justify-center gap-1 transition"
                     >
                          <RefreshCw size={12} className={isLoading ? "animate-spin" : ""} /> 
-                         {isLoading ? 'Odświeżanie...' : 'Odśwież bazę'}
+                         {isLoading ? 'Pobieranie bazy...' : 'Odśwież kody kierowców'}
                     </button>
                 </div>
             </div>

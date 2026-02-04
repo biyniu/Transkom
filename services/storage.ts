@@ -160,6 +160,72 @@ export const deleteDay = (id: string) => {
   saveWorkDays(days);
 };
 
+// NEW FUNCTION: Batch update history (Current Month + Previous Month)
+export const updateRecentHistoryRates = (): number => {
+    const days = getWorkDays();
+    const locations = getLocations();
+    
+    // Logic: Current Month + Previous Month
+    // Example: Today is 04.02.2026. We want to include everything from 01.01.2026.
+    const now = new Date();
+    // getMonth() is 0-indexed. Subtracting 1 gives previous month. 
+    // JS automatically handles year rollover (e.g. Jan index 0 - 1 = Dec previous year).
+    const cutoffDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    // Reset hours to start of that day
+    cutoffDate.setHours(0, 0, 0, 0);
+
+    let modifiedDaysCount = 0;
+
+    const updatedDays = days.map(day => {
+        // Skip days older than cutoff (Previous Month 1st)
+        // We compare timestamps
+        const dayDate = new Date(day.date);
+        dayDate.setHours(0,0,0,0);
+        
+        if (dayDate < cutoffDate) return day;
+
+        // Skip non-work days
+        if (day.type !== DayType.WORK) return day;
+
+        let dayModified = false;
+        
+        const newTrips = day.trips.map(trip => {
+            const loc = locations.find(l => l.id === trip.locationId);
+            
+            // Check if matches location ID AND (rate changed OR name changed)
+            if (loc && (loc.rate !== trip.rate || loc.name !== trip.locationName)) {
+                dayModified = true;
+                
+                // Recalculate financial values based on NEW rate
+                const { amount, bonus } = calculateTrip(trip.weight, loc.rate);
+                
+                return {
+                    ...trip,
+                    rate: loc.rate, // Update rate
+                    locationName: loc.name, // Update name
+                    amount,
+                    bonus
+                };
+            }
+            return trip;
+        });
+
+        if (dayModified) {
+            modifiedDaysCount++;
+            // Use calculateDayTotals to ensure summary fields (totals) are updated
+            return calculateDayTotals({ ...day, trips: newTrips });
+        }
+
+        return day;
+    });
+
+    if (modifiedDaysCount > 0) {
+        saveWorkDays(updatedDays);
+    }
+
+    return modifiedDaysCount;
+};
+
 // --- Calculation Logic ---
 
 export const calculateTrip = (weight: number, rate: number): { amount: number; bonus: number } => {

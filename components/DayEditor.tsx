@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, Save, ArrowLeft, Clock, Search, X, Wrench, Hourglass, Thermometer } from 'lucide-react';
+import { Plus, Trash2, Save, ArrowLeft, Clock, Search, X, Wrench, Hourglass, Thermometer, Moon } from 'lucide-react';
 import { WorkDay, DayType, LocationRate, Trip, AppSettings } from '../types';
 import * as StorageService from '../services/storage';
 
@@ -16,6 +16,9 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
   // Local UI states to keep inputs visible even if value is 0 during typing
   const [showWorkshop, setShowWorkshop] = useState(false);
   const [showWaiting, setShowWaiting] = useState(false);
+  
+  // State for Daily Rest Calculation
+  const [restInfo, setRestInfo] = useState<{ label: string; colorClass: string } | null>(null);
 
   const [day, setDay] = useState<WorkDay>({
     id: uuidv4(),
@@ -53,6 +56,81 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
         setShowWaiting(false);
     }
   }, [dayId]);
+
+  // Effect to calculate rest time whenever relevant fields change
+  useEffect(() => {
+    calculateDailyRest();
+  }, [day.date, day.startTime, day.type]);
+
+  const calculateDailyRest = () => {
+    if (day.type !== DayType.WORK) {
+        setRestInfo(null);
+        return;
+    }
+
+    const allDays = StorageService.getWorkDays();
+    // Filter out current day (in case we are editing an existing one) to find the previous one correctly
+    const otherDays = allDays.filter(d => d.id !== day.id && d.type === DayType.WORK);
+    
+    // Sort descending by date
+    const sorted = otherDays.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const currentDayDate = new Date(day.date);
+    
+    // Find the most recent work day strictly BEFORE the current date
+    const prevDay = sorted.find(d => new Date(d.date) < currentDayDate);
+
+    if (!prevDay) {
+        setRestInfo(null);
+        return;
+    }
+
+    // Calculate Previous Shift END Timestamp
+    let prevEndDate = new Date(`${prevDay.date}T${prevDay.endTime}`);
+    const prevStartDate = new Date(`${prevDay.date}T${prevDay.startTime}`);
+    
+    // Handle overnight shift (if End is before Start, assume it implies next day)
+    // OR if duration logic implies it. Simple check: if End <= Start, it ends +1 day.
+    if (prevEndDate <= prevStartDate) {
+        prevEndDate.setDate(prevEndDate.getDate() + 1);
+    }
+
+    // Calculate Current Shift START Timestamp
+    const currentStart = new Date(`${day.date}T${day.startTime}`);
+
+    // Difference in milliseconds
+    const diffMs = currentStart.getTime() - prevEndDate.getTime();
+
+    // If negative, it means overlap or data error
+    if (diffMs < 0) {
+        setRestInfo({
+            label: "Błąd (nakładanie się zmian)",
+            colorClass: "bg-red-50 text-red-600 border-red-200"
+        });
+        return;
+    }
+
+    const diffMins = Math.floor(diffMs / 1000 / 60);
+    const hours = Math.floor(diffMins / 60);
+    const mins = diffMins % 60;
+
+    // Determine Color based on legal limits (approx rules)
+    // > 11h: Green (Standard daily rest)
+    // 9h - 11h: Orange (Reduced daily rest)
+    // < 9h: Red (Violation)
+    let colorClass = "bg-green-50 text-green-700 border-green-200"; // Safe
+    
+    if (hours < 9) {
+        colorClass = "bg-red-50 text-red-600 border-red-200";
+    } else if (hours < 11) {
+        colorClass = "bg-orange-50 text-orange-700 border-orange-200";
+    }
+
+    setRestInfo({
+        label: `${hours}h ${mins}m`,
+        colorClass
+    });
+  };
 
   const handleTripChange = (tripId: string, field: keyof Trip, value: any) => {
     const updatedTrips = day.trips.map(trip => {
@@ -197,25 +275,39 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
           </div>
 
           {(day.type === DayType.WORK) && (
-            <div className="grid grid-cols-2 gap-3 animate-fade-in">
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Start</label>
-                <input 
-                  type="time" 
-                  value={day.startTime}
-                  onChange={e => setDay({...day, startTime: e.target.value})}
-                  className="w-full p-3 border border-slate-300 rounded-lg text-center bg-gray-50 text-lg"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Koniec</label>
-                <input 
-                  type="time" 
-                  value={day.endTime}
-                  onChange={e => setDay({...day, endTime: e.target.value})}
-                  className="w-full p-3 border border-slate-300 rounded-lg text-center bg-gray-50 text-lg"
-                />
-              </div>
+            <div className="animate-fade-in">
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Start</label>
+                        <input 
+                        type="time" 
+                        value={day.startTime}
+                        onChange={e => setDay({...day, startTime: e.target.value})}
+                        className="w-full p-3 border border-slate-300 rounded-lg text-center bg-gray-50 text-lg"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Koniec</label>
+                        <input 
+                        type="time" 
+                        value={day.endTime}
+                        onChange={e => setDay({...day, endTime: e.target.value})}
+                        className="w-full p-3 border border-slate-300 rounded-lg text-center bg-gray-50 text-lg"
+                        />
+                    </div>
+                </div>
+
+                {/* Daily Rest Display */}
+                {restInfo && (
+                    <div className={`mt-3 px-3 py-2 rounded-lg border flex items-center justify-between shadow-sm ${restInfo.colorClass}`}>
+                        <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide opacity-90">
+                            <Moon size={14} /> Odpoczynek
+                        </div>
+                        <div className="font-bold text-sm">
+                            {restInfo.label}
+                        </div>
+                    </div>
+                )}
             </div>
           )}
         </section>
@@ -324,10 +416,8 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
         {/* Trips Section */}
         {day.type === DayType.WORK && (
           <section className="space-y-4 animate-fade-in">
-            <div className="flex justify-between items-center px-1">
-              <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Lista Kursów</h3>
-            </div>
-
+            <h3 className="text-sm font-semibold text-slate-700 px-1 uppercase tracking-wider">Lista Kursów</h3>
+            
             {day.trips.map((trip) => (
               <TripCard 
                 key={trip.id} 
