@@ -1,5 +1,6 @@
+
 import { WorkDay, LocationRate, Trip, DayType, AppSettings, Driver } from '../types';
-import * as ApiService from './api'; // Import API service
+import * as ApiService from './api';
 import { v4 as uuidv4 } from 'uuid';
 
 const STORAGE_KEYS = {
@@ -9,10 +10,8 @@ const STORAGE_KEYS = {
   SETTINGS: 'kierowcapro_settings',
 };
 
-// --- Initial Data from Excel ---
 const INITIAL_LOCATIONS: LocationRate[] = [
   { id: '1', name: 'Siemianowice DOMBUD', rate: 2.85 },
-  // ... (reszta skrócona dla czytelności kodu, ale w produkcji powinna zostać zachowana lub pobrana z chmury)
   { id: 'extra3', name: 'MATERIAŁ FREZY', rate: 9 },
 ];
 
@@ -23,12 +22,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   hourlyRate: 4.5,
   workshopRate: 10,
   waitingRate: 8,
-  
-  totalVacationDays: 30, // Łącznie z zaległym
-  vacationDaysLimit: 26  // Limit bieżącego roku
+  totalVacationDays: 30,
+  vacationDaysLimit: 26
 };
-
-// --- Settings Logic ---
 
 export const getSettings = (): AppSettings => {
   const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
@@ -39,17 +35,9 @@ export const saveSettings = (settings: AppSettings) => {
   localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
 };
 
-// --- Locations Logic ---
-
 export const getLocations = (): LocationRate[] => {
   const data = localStorage.getItem(STORAGE_KEYS.LOCATIONS);
-  if (data) {
-    return JSON.parse(data);
-  } else {
-    // Seed initial data if empty
-    saveLocations(INITIAL_LOCATIONS, false); // Don't sync init seed to avoid overwrite cloud empty state
-    return INITIAL_LOCATIONS;
-  }
+  return data ? JSON.parse(data) : INITIAL_LOCATIONS;
 };
 
 export const saveLocations = (locations: LocationRate[], sync = true) => {
@@ -58,8 +46,6 @@ export const saveLocations = (locations: LocationRate[], sync = true) => {
       ApiService.syncLocations(locations);
   }
 };
-
-// --- Drivers Logic ---
 
 export const getDrivers = (): Driver[] => {
   const data = localStorage.getItem(STORAGE_KEYS.DRIVERS);
@@ -73,9 +59,6 @@ export const saveDrivers = (drivers: Driver[], sync = true) => {
   }
 };
 
-
-// --- Work Days Logic ---
-
 export const getWorkDays = (): WorkDay[] => {
   const data = localStorage.getItem(STORAGE_KEYS.DAYS);
   return data ? JSON.parse(data) : [];
@@ -83,7 +66,6 @@ export const getWorkDays = (): WorkDay[] => {
 
 export const saveWorkDays = (days: WorkDay[]) => {
   localStorage.setItem(STORAGE_KEYS.DAYS, JSON.stringify(days));
-  // Trigger Sync
   const settings = getSettings();
   if (settings.driverId) {
     ApiService.syncDriverData(settings.driverId, days);
@@ -95,29 +77,22 @@ export const getDayById = (id: string): WorkDay | undefined => {
   return days.find((d) => d.id === id);
 };
 
-// Helper: Recalculate vacation rates based on pool usage
 const recalculateVacations = (allDays: WorkDay[]): WorkDay[] => {
     const settings = getSettings();
     const oldVacationPool = Math.max(0, settings.totalVacationDays - settings.vacationDaysLimit);
-    
-    // Process each year separately to be safe, although usually user cares about current year
     const years = Array.from(new Set(allDays.map(d => new Date(d.date).getFullYear())));
-    
     let updatedDays = [...allDays];
 
     years.forEach(year => {
-        // Filter vacation days for this year
         const vacationDays = updatedDays
             .filter(d => d.type === DayType.VACATION && new Date(d.date).getFullYear() === year)
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         
-        // Apply rates: First X days get OLD rate, rest get NEW rate
         vacationDays.forEach((day, index) => {
             const isOldRate = index < oldVacationPool;
             day.totalAmount = isOldRate ? settings.vacationRateOld : settings.vacationRateNew;
         });
 
-        // Update the main array
         updatedDays = updatedDays.map(d => {
             const updatedVacation = vacationDays.find(vd => vd.id === d.id);
             return updatedVacation || d;
@@ -130,8 +105,6 @@ const recalculateVacations = (allDays: WorkDay[]): WorkDay[] => {
 export const saveDay = (day: WorkDay) => {
   let days = getWorkDays();
   const index = days.findIndex((d) => d.id === day.id);
-  
-  // Calculate specific day totals first (standard calculation)
   const calculatedDay = calculateDayTotals(day);
 
   if (index >= 0) {
@@ -140,97 +113,62 @@ export const saveDay = (day: WorkDay) => {
     days.push(calculatedDay);
   }
 
-  // RECALCULATE VACATIONS GLOBALLY
-  // This ensures that if we added a vacation day in the past, rates shift correctly
   if (calculatedDay.type === DayType.VACATION || days.some(d => d.type === DayType.VACATION)) {
       days = recalculateVacations(days);
   }
 
-  // Sort by date desc
   days.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   saveWorkDays(days);
 };
 
 export const deleteDay = (id: string) => {
   let days = getWorkDays().filter((d) => d.id !== id);
-  
-  // Recalculate vacations in case we deleted one, shifting the pool
   days = recalculateVacations(days);
-  
   saveWorkDays(days);
 };
 
-// NEW FUNCTION: Batch update history (Current Month + Previous Month)
 export const updateRecentHistoryRates = (): number => {
     const days = getWorkDays();
     const locations = getLocations();
-    
-    // Logic: Current Month + Previous Month
-    // Example: Today is 04.02.2026. We want to include everything from 01.01.2026.
     const now = new Date();
-    // getMonth() is 0-indexed. Subtracting 1 gives previous month. 
-    // JS automatically handles year rollover (e.g. Jan index 0 - 1 = Dec previous year).
     const cutoffDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    // Reset hours to start of that day
     cutoffDate.setHours(0, 0, 0, 0);
 
     let modifiedDaysCount = 0;
 
     const updatedDays = days.map(day => {
-        // Skip days older than cutoff (Previous Month 1st)
-        // We compare timestamps
         const dayDate = new Date(day.date);
         dayDate.setHours(0,0,0,0);
-        
         if (dayDate < cutoffDate) return day;
-
-        // Skip non-work days
         if (day.type !== DayType.WORK) return day;
 
         let dayModified = false;
-        
         const newTrips = day.trips.map(trip => {
             const loc = locations.find(l => l.id === trip.locationId);
-            
-            // Check if matches location ID AND (rate changed OR name changed)
             if (loc && (loc.rate !== trip.rate || loc.name !== trip.locationName)) {
                 dayModified = true;
-                
-                // Recalculate financial values based on NEW rate
                 const { amount, bonus } = calculateTrip(trip.weight, loc.rate);
-                
-                return {
-                    ...trip,
-                    rate: loc.rate, // Update rate
-                    locationName: loc.name, // Update name
-                    amount,
-                    bonus
-                };
+                return { ...trip, rate: loc.rate, locationName: loc.name, amount, bonus };
             }
             return trip;
         });
 
         if (dayModified) {
             modifiedDaysCount++;
-            // Use calculateDayTotals to ensure summary fields (totals) are updated
             return calculateDayTotals({ ...day, trips: newTrips });
         }
-
         return day;
     });
 
     if (modifiedDaysCount > 0) {
         saveWorkDays(updatedDays);
     }
-
     return modifiedDaysCount;
 };
 
-// --- Calculation Logic ---
-
 export const calculateTrip = (weight: number, rate: number): { amount: number; bonus: number } => {
   const amount = weight * rate;
-  const bonus = amount * 0.20; // 20% fuel bonus
+  const bonus = amount * 0.20;
   return { amount, bonus };
 };
 
@@ -238,10 +176,8 @@ const calculateDurationHours = (start: string, end: string): number => {
   if (!start || !end) return 0;
   const [startH, startM] = start.split(':').map(Number);
   const [endH, endM] = end.split(':').map(Number);
-  
   let diff = (endH * 60 + endM) - (startH * 60 + startM);
-  if (diff < 0) diff += 24 * 60; // Handle overnight
-  
+  if (diff < 0) diff += 24 * 60;
   return diff / 60;
 };
 
@@ -258,45 +194,25 @@ export const calculateDayTotals = (day: WorkDay): WorkDay => {
     trips: []
   };
 
-  // 1. URLOP
   if (day.type === DayType.VACATION) {
-    // Note: The specific rate (old vs new) is handled in saveDay -> recalculateVacations
-    // For live preview, we fallback to New Rate or keep existing if editing
-    return {
-      ...day,
-      totalAmount: day.totalAmount || settings.vacationRateNew, 
-      ...zeros
-    };
+    return { ...day, totalAmount: day.totalAmount || settings.vacationRateNew, ...zeros };
   }
-
-  // 2. L4 (SICK LEAVE)
   if (day.type === DayType.SICK_LEAVE) {
-    return {
-      ...day,
-      totalAmount: settings.sickLeaveRate,
-      ...zeros
-    };
+    return { ...day, totalAmount: settings.sickLeaveRate, ...zeros };
   }
 
-  // 3. WORK - Calculate Trips AND Hourly Bonus AND Workshop
   let totalAmount = 0;
   let totalBonus = 0;
   let totalWeight = 0;
   let totalHourlyBonus = 0;
 
-  // Hourly Bonus: Hours * Rate
-  // FIX: Only calculate if endTime is explicitly different than default "04:00"
-  // This prevents calculation of ~23h if user changes Start to 04:40 but leaves End at 04:00.
   if (day.startTime && day.endTime && day.endTime !== '04:00') {
      const hours = calculateDurationHours(day.startTime, day.endTime);
      totalHourlyBonus = hours * settings.hourlyRate;
   }
 
-  // Workshop Bonus
   const workshopHours = day.workshopHours || 0;
   const totalWorkshop = workshopHours * settings.workshopRate;
-
-  // Waiting Bonus
   const waitingHours = day.waitingHours || 0;
   const totalWaiting = waitingHours * settings.waitingRate;
 
@@ -320,8 +236,6 @@ export const calculateDayTotals = (day: WorkDay): WorkDay => {
   };
 };
 
-// --- Import/Export ---
-
 export const exportData = () => {
   const data = {
     settings: getSettings(),
@@ -342,15 +256,9 @@ export const importData = async (file: File): Promise<boolean> => {
   try {
     const text = await file.text();
     const data = JSON.parse(text);
-    if (data.settings) {
-      saveSettings(data.settings);
-    }
-    if (data.locations && Array.isArray(data.locations)) {
-      saveLocations(data.locations, true); // Sync after import
-    }
-    if (data.days && Array.isArray(data.days)) {
-      saveWorkDays(data.days);
-    }
+    if (data.settings) saveSettings(data.settings);
+    if (data.locations && Array.isArray(data.locations)) saveLocations(data.locations, true);
+    if (data.days && Array.isArray(data.days)) saveWorkDays(data.days);
     return true;
   } catch (e) {
     console.error("Import failed", e);

@@ -1,130 +1,129 @@
-import { AppSettings, LocationRate, WorkDay, Driver } from '../types';
-import * as StorageService from './storage';
 
-// --- KONFIGURACJA ---
-// TUTAJ WKLEJ SWÓJ URL Z GOOGLE APPS SCRIPT (Web App URL)
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwrMswAZj6zD5aY8D8RaVip3pSgizyFk42cU0g-lezwsASz6iAKHhbjg617J2ksAZwC/exec'; 
-// --------------------
+import { initializeApp } from "firebase/app";
+import { 
+    getFirestore, 
+    doc, 
+    setDoc, 
+    getDoc, 
+    enableIndexedDbPersistence 
+} from "firebase/firestore";
+import { LocationRate, WorkDay, Driver } from '../types';
 
-const getScriptUrl = () => {
-    // Priorytet ma hardcodowany URL, ale jako fallback sprawdzamy settings (dla wstecznej kompatybilności)
-    return GOOGLE_SCRIPT_URL || StorageService.getSettings().googleScriptUrl || '';
+/**
+ * KONFIGURACJA FIREBASE
+ */
+const firebaseConfig = {
+  apiKey: "AIzaSyDGgCcjDKqFX9QeiTi8t-DQkd01WWflDpg",
+  authDomain: "transkom-86761.firebaseapp.com",
+  projectId: "transkom-86761",
+  storageBucket: "transkom-86761.firebasestorage.app",
+  messagingSenderId: "510661919174",
+  appId: "1:510661919174:web:1399549b7c95c7472732c7"
 };
 
-// Nowa funkcja sprawdzająca czy URL jest poprawny (dla UI ustawień)
-export const hasValidUrl = () => {
-    const url = getScriptUrl();
-    return url && url.length > 20 && !url.includes('...');
+// Inicjalizacja Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// Włączenie trybu offline
+try {
+    enableIndexedDbPersistence(db).catch((err) => {
+        if (err.code === 'failed-precondition') {
+            console.warn("Wykryto wiele otwartych kart - synchronizacja offline ograniczona.");
+        } else if (err.code === 'unimplemented') {
+            console.warn("Twoja przeglądarka nie obsługuje trybu offline Firebase.");
+        }
+    });
+} catch (e) {}
+
+/**
+ * Sprawdza czy konfiguracja Firebase została wprowadzona
+ */
+export const isFirebaseConfigured = () => {
+    return firebaseConfig.apiKey && firebaseConfig.apiKey !== "TWOJE_API_KEY";
 };
 
-interface ApiResponse {
-    status: 'success' | 'error';
-    data?: any;
-    message?: string;
-}
-
+// --- SYNCHRONIZACJA KURSÓW KIEROWCY ---
 export const syncDriverData = async (driverId: string, days: WorkDay[]) => {
-    const url = getScriptUrl();
-    if (!url || !driverId || url.includes('...')) return;
-
-    const payload = {
-        action: 'SAVE_DRIVER_DATA',
-        driverId: driverId,
-        days: JSON.stringify(days)
-    };
-
+    if (!isFirebaseConfigured() || !driverId) return;
     try {
-        await fetch(url, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        });
+        const driverRef = doc(db, "driverData", driverId);
+        await setDoc(driverRef, { 
+            days: JSON.stringify(days),
+            lastSync: new Date().toISOString(),
+            driverId: driverId
+        }, { merge: true });
     } catch (e) {
-        console.error("Sync error", e);
+        console.error("Błąd zapisu kursów w Firebase:", e);
     }
 };
 
-export const fetchDriverData = async (driverId: string): Promise<WorkDay[] | null> => {
-    const url = getScriptUrl();
-    if (!url || url.includes('...')) return null;
-
+export const fetchDriverData = async (driverId: string): Promise<WorkDay[]> => {
+    if (!isFirebaseConfigured() || !driverId) return [];
     try {
-        const response = await fetch(`${url}?action=GET_DRIVER_DATA&driverId=${driverId}`);
-        const json = await response.json();
-        if (json.status === 'success' && json.data) {
-            return JSON.parse(json.data);
+        const driverRef = doc(db, "driverData", driverId);
+        const docSnap = await getDoc(driverRef);
+        if (docSnap.exists()) {
+            return JSON.parse(docSnap.data().days);
         }
     } catch (e) {
-        console.error("Fetch error", e);
+        console.error("Błąd pobierania kursów z Firebase:", e);
     }
-    return null;
+    return [];
 };
 
+// --- SYNCHRONIZACJA BAZY MIEJSCOWOŚCI ---
 export const syncLocations = async (locations: LocationRate[]) => {
-    const url = getScriptUrl();
-    if (!url || url.includes('...')) return;
-
-    const payload = {
-        action: 'UPDATE_LOCATIONS',
-        locations: JSON.stringify(locations)
-    };
-
+    if (!isFirebaseConfigured()) return;
     try {
-        await fetch(url, {
-            method: 'POST',
-            body: JSON.stringify(payload)
+        const locRef = doc(db, "config", "locations");
+        await setDoc(locRef, { 
+            data: JSON.stringify(locations),
+            updatedAt: new Date().toISOString()
         });
     } catch (e) {
-        console.error("Locations sync error", e);
+        console.error("Błąd zapisu miejscowości w Firebase:", e);
     }
 };
 
-export const fetchLocations = async (): Promise<LocationRate[] | null> => {
-    const url = getScriptUrl();
-    if (!url || url.includes('...')) return null;
-
+export const fetchLocations = async (): Promise<LocationRate[]> => {
+    if (!isFirebaseConfigured()) return [];
     try {
-        const response = await fetch(`${url}?action=GET_LOCATIONS`);
-        const json = await response.json();
-        if (json.status === 'success' && json.data) {
-            return JSON.parse(json.data);
+        const locRef = doc(db, "config", "locations");
+        const docSnap = await getDoc(locRef);
+        if (docSnap.exists()) {
+            return JSON.parse(docSnap.data().data);
         }
     } catch (e) {
-        console.error("Fetch locations error", e);
+        console.error("Błąd pobierania miejscowości z Firebase:", e);
     }
-    return null;
+    return [];
 };
 
+// --- SYNCHRONIZACJA KIEROWCÓW ---
 export const syncDrivers = async (drivers: Driver[]) => {
-    const url = getScriptUrl();
-    if (!url || url.includes('...')) return;
-
-    const payload = {
-        action: 'UPDATE_DRIVERS',
-        drivers: JSON.stringify(drivers)
-    };
-
+    if (!isFirebaseConfigured()) return;
     try {
-        await fetch(url, {
-            method: 'POST',
-            body: JSON.stringify(payload)
+        const driversRef = doc(db, "config", "drivers");
+        await setDoc(driversRef, { 
+            data: JSON.stringify(drivers),
+            updatedAt: new Date().toISOString()
         });
     } catch (e) {
-        console.error("Drivers sync error", e);
+        console.error("Błąd zapisu kierowców w Firebase:", e);
     }
 };
 
-export const fetchDrivers = async (): Promise<Driver[] | null> => {
-    const url = getScriptUrl();
-    if (!url || url.includes('...')) return null;
-
+export const fetchDrivers = async (): Promise<Driver[]> => {
+    if (!isFirebaseConfigured()) return [];
     try {
-        const response = await fetch(`${url}?action=GET_DRIVERS`);
-        const json = await response.json();
-        if (json.status === 'success' && json.data) {
-            return JSON.parse(json.data);
+        const driversRef = doc(db, "config", "drivers");
+        const docSnap = await getDoc(driversRef);
+        if (docSnap.exists()) {
+            return JSON.parse(docSnap.data().data);
         }
     } catch (e) {
-        console.error("Fetch drivers error", e);
+        console.error("Błąd pobierania kierowców z Firebase:", e);
     }
-    return null;
+    return [];
 };

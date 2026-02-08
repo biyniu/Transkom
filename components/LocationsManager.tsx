@@ -1,8 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Trash2, Plus, Download, Upload, Save, X, Edit2, Database, Lock, Info, TableProperties, RefreshCw } from 'lucide-react';
+import { Trash2, Plus, Download, Upload, Save, X, Edit2, Database, Lock, Info, TableProperties, RefreshCw, FileSpreadsheet, FileJson } from 'lucide-react';
 import { LocationRate } from '../types';
 import * as StorageService from '../services/storage';
+import * as XLSX from 'xlsx';
 
 interface LocationsManagerProps {
     mode?: 'ADMIN' | 'DRIVER';
@@ -59,9 +61,7 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
   };
 
   const openEditForm = (loc: LocationRate) => {
-    // Security check
     if (mode !== 'ADMIN') return;
-    
     setEditingId(loc.id);
     setFormData({ name: loc.name, rate: loc.rate.toString() });
     setIsFormOpen(true);
@@ -81,15 +81,13 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
     let updatedLocations: LocationRate[];
 
     if (editingId) {
-      // Update existing (Admin only logic effectively, as edit form won't open for driver)
       updatedLocations = locations.map(loc => 
         loc.id === editingId ? { ...loc, name: formData.name, rate } : loc
       );
       setMessage('Zaktualizowano miejscowość');
     } else {
-      // Add new
       updatedLocations = [...locations, { id: uuidv4(), name: formData.name, rate }];
-      setMessage('Dodano nową miejscowość do bazy Google');
+      setMessage('Dodano nową miejscowość');
     }
 
     StorageService.saveLocations(updatedLocations);
@@ -100,7 +98,6 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
 
   const handleDelete = (id: string) => {
     if (mode !== 'ADMIN') return;
-
     if (confirm('Czy na pewno usunąć tę miejscowość?')) {
       const updated = locations.filter(l => l.id !== id);
       StorageService.saveLocations(updated);
@@ -110,24 +107,95 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
 
   const handleExport = () => {
     StorageService.exportData();
-    setMessage('Baza została zapisana do pliku!');
+    setMessage('Baza zapisana do JSON!');
     setTimeout(() => setMessage(''), 3000);
   };
 
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportJson = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const success = await StorageService.importData(e.target.files[0]);
       if (success) {
         setLocations(StorageService.getLocations());
         setMessage('Baza wczytana pomyślnie!');
       } else {
-        setMessage('Błąd importu pliku!');
+        setMessage('Błąd importu pliku JSON!');
       }
       setTimeout(() => setMessage(''), 3000);
     }
   };
 
-  // Logic to refresh historical data
+  const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !e.target.files[0]) return;
+    
+    const file = e.target.files[0];
+    const reader = new FileReader();
+    
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+        
+        if (data.length < 2) {
+          setMessage('Plik Excel wydaje się pusty.');
+          return;
+        }
+
+        // Find headers
+        const headers = data[0].map(h => String(h).toLowerCase());
+        const nameIdx = headers.findIndex(h => h.includes('miejscow') || h.includes('nazwa') || h.includes('cel') || h.includes('name'));
+        const rateIdx = headers.findIndex(h => h.includes('stawk') || h.includes('cena') || h.includes('przelicz') || h.includes('rate'));
+
+        if (nameIdx === -1 || rateIdx === -1) {
+          setMessage('Nie znaleziono kolumn: "Nazwa" i "Stawka". Sprawdź nagłówki w Excelu.');
+          return;
+        }
+
+        const newLocations: LocationRate[] = [];
+        for (let i = 1; i < data.length; i++) {
+          const row = data[i];
+          const name = row[nameIdx];
+          const rawRate = row[rateIdx];
+          
+          if (name && rawRate !== undefined) {
+            const rate = typeof rawRate === 'string' ? parseFloat(rawRate.replace(',', '.')) : parseFloat(rawRate);
+            if (!isNaN(rate)) {
+              newLocations.push({
+                id: uuidv4(),
+                name: String(name).trim(),
+                rate: rate
+              });
+            }
+          }
+        }
+
+        if (newLocations.length > 0) {
+            if (confirm(`Znaleziono ${newLocations.length} miejscowości. Czy chcesz je DOŁĄCZYĆ do obecnej bazy? (Anuluj aby zastąpić całą bazę)`)) {
+                const combined = [...locations, ...newLocations];
+                StorageService.saveLocations(combined);
+                setLocations(combined);
+            } else {
+                StorageService.saveLocations(newLocations);
+                setLocations(newLocations);
+            }
+            setMessage(`Zaimportowano ${newLocations.length} pozycji z Excela!`);
+        } else {
+          setMessage('Nie udało się zaimportować żadnych danych.');
+        }
+
+      } catch (error) {
+        console.error(error);
+        setMessage('Błąd podczas odczytu pliku Excel.');
+      }
+      setTimeout(() => setMessage(''), 3000);
+      e.target.value = ''; // Reset input
+    };
+
+    reader.readAsBinaryString(file);
+  };
+
   const handleGlobalRateRefresh = () => {
     if (confirm("Czy na pewno chcesz zaktualizować stawki i nazwy we WSZYSTKICH kursach z obecnego i poprzedniego miesiąca?")) {
         const count = StorageService.updateRecentHistoryRates();
@@ -154,7 +222,6 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
           </div>
           
           <div className="flex gap-2">
-            {/* NEW REFRESH BUTTON - ADMIN ONLY */}
             {mode === 'ADMIN' && (
                 <button 
                   onClick={handleGlobalRateRefresh}
@@ -162,7 +229,7 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
                   title="Odśwież stawki (Obecny i Poprzedni miesiąc)"
                 >
                   <RefreshCw size={16} /> 
-                  <span className="hidden sm:inline">Odśwież (Obecny+Poprzedni)</span>
+                  <span className="hidden sm:inline">Aktualizuj Kursy</span>
                 </button>
             )}
 
@@ -176,9 +243,8 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
         </div>
       </div>
 
-      {/* Message Toast */}
       {message && (
-        <div className="absolute top-20 left-4 right-4 z-50 p-3 bg-green-100 text-green-800 border border-green-200 rounded-lg text-center text-sm font-bold shadow-md animate-fade-in">
+        <div className="absolute top-20 left-4 right-4 z-50 p-3 bg-blue-600 text-white rounded-lg text-center text-sm font-bold shadow-xl animate-fade-in ring-4 ring-blue-100">
           {message}
         </div>
       )}
@@ -186,7 +252,6 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
       {/* 2. SCROLLABLE LIST AREA */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
         
-        {/* Add/Edit Form (Inline in scroll area) */}
         {isFormOpen && (
           <div className="bg-white p-4 rounded-xl border-2 border-blue-100 shadow-md animate-fade-in mb-4">
             <div className="flex justify-between items-center mb-3 border-b border-slate-100 pb-2">
@@ -198,75 +263,57 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
               </button>
             </div>
 
-            {/* INFO TABS - VISIBLE ONLY WHEN ADDING NEW */}
             {!editingId && (
               <div className="bg-slate-50 border border-blue-200 rounded-lg p-3 mb-4 space-y-3">
-                 
-                 {/* Tabs Navigation */}
                  <div className="flex gap-2 border-b border-blue-200 pb-0">
                     <button 
                         onClick={() => setInfoTab('RULES')}
                         className={`flex-1 py-2 text-xs font-bold transition-all rounded-t-lg border-b-2 ${infoTab === 'RULES' ? 'bg-blue-100 text-blue-800 border-blue-600' : 'text-blue-600 border-transparent hover:bg-blue-50'}`}
                     >
-                        <span className="flex items-center justify-center gap-1"><Info size={14}/> Zasady nazewnictwa</span>
+                        <span className="flex items-center justify-center gap-1"><Info size={14}/> Zasady</span>
                     </button>
                     <button 
                         onClick={() => setInfoTab('TABLE')}
                         className={`flex-1 py-2 text-xs font-bold transition-all rounded-t-lg border-b-2 ${infoTab === 'TABLE' ? 'bg-green-100 text-green-800 border-green-600' : 'text-green-600 border-transparent hover:bg-green-50'}`}
                     >
-                         <span className="flex items-center justify-center gap-1"><TableProperties size={14}/> Tabela stawek</span>
+                         <span className="flex items-center justify-center gap-1"><TableProperties size={14}/> Stawki km</span>
                     </button>
                  </div>
 
-                 {/* Tab Content: RULES */}
                  {infoTab === 'RULES' && (
                     <div className="text-xs text-slate-700 animate-fade-in bg-blue-50/50 p-2 rounded-b-lg">
                         <ul className="space-y-2 mt-2">
                             <li className="flex flex-col">
-                                <span className="font-semibold text-slate-900">1. Z kopalni Szymiszów:</span>
-                                <span>Wpisujemy Cel i Firmę (bez słowa Szymiszów).</span>
-                                <span className="text-slate-500 italic">Np: Wrocław DROGBUD</span>
+                                <span className="font-semibold text-slate-900">1. Szymiszów:</span>
+                                <span>Cel i Firma (Np: Wrocław DROGBUD)</span>
                             </li>
                             <li className="flex flex-col">
-                                <span className="font-semibold text-slate-900">2. Z kopalni Poborszów:</span>
-                                <span>Wpisujemy: Poborszów - Cel FIRMA.</span>
-                                <span className="text-slate-500 italic">Np: Poborszów - Opole SANDMIX</span>
+                                <span className="font-semibold text-slate-900">2. Poborszów:</span>
+                                <span>Poborszów - Cel FIRMA (Np: Poborszów - Opole SANDMIX)</span>
                             </li>
                             <li className="flex flex-col">
-                                <span className="font-semibold text-slate-900">3. Obcy załadunek:</span>
-                                <span>Wpisujemy: Start - Cel FIRMA.</span>
-                                <span className="text-slate-500 italic">Np: Chruszczobród - Katowice DOMBUD</span>
+                                <span className="font-semibold text-slate-900">3. Inne:</span>
+                                <span>Start - Cel FIRMA</span>
                             </li>
                         </ul>
-                        <div className="bg-blue-200 p-2 rounded text-blue-900 font-bold text-center mt-3 border border-blue-300">
-                            NAZWĘ FIRMY PISZEMY ZAWSZE DUŻYMI LITERAMI NA KOŃCU
-                        </div>
                     </div>
                  )}
 
-                 {/* Tab Content: TABLE (COMPACT VERSION) */}
                  {infoTab === 'TABLE' && (
                      <div className="animate-fade-in bg-green-50/50 p-2 rounded-b-lg">
-                        <div className="text-[10px] text-green-700 mb-2 italic text-center font-medium">
-                            Wybierz przedział kilometrowy, aby ustalić stawkę
-                        </div>
-                        <div className="max-h-56 overflow-y-auto rounded border border-green-200">
+                        <div className="max-h-48 overflow-y-auto rounded border border-green-200">
                             <table className="w-full text-xs">
                                 <thead className="bg-green-100 text-green-800 font-bold sticky top-0 z-10 shadow-sm">
                                     <tr>
-                                        <th className="p-2 border-b border-green-200 text-center w-1/2">Dystans (km)</th>
-                                        <th className="p-2 border-b border-green-200 text-center w-1/2 bg-green-200">Stawka</th>
+                                        <th className="p-2 border-b border-green-200 text-center">Dystans</th>
+                                        <th className="p-2 border-b border-green-200 text-center">Stawka</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-green-100 bg-white">
                                     {RATE_TABLE_DATA.map((row, idx) => (
                                         <tr key={idx} className="hover:bg-green-50">
-                                            <td className="p-2 text-center text-slate-600 font-medium border-r border-green-50">
-                                                {row.min} - {row.max}
-                                            </td>
-                                            <td className="p-2 text-center font-bold text-green-700 bg-green-50/30">
-                                                {row.rate}
-                                            </td>
+                                            <td className="p-2 text-center text-slate-600">{row.min} - {row.max} km</td>
+                                            <td className="p-2 text-center font-bold text-green-700">{row.rate}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -274,19 +321,15 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
                         </div>
                      </div>
                  )}
-
-                 <div className="border-t border-slate-200 pt-2 text-slate-500 text-[10px] text-center">
-                   Użyj powyższych danych, aby poprawnie wypełnić pola poniżej.
-                 </div>
               </div>
             )}
             
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Nazwa miejscowości</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Nazwa miejscowości / Firmy</label>
                 <input 
                   type="text" 
-                  autoFocus={!editingId} // Autofocus only on new entry
+                  autoFocus={!editingId} 
                   placeholder="Np. Wrocław DROGBUD" 
                   value={formData.name}
                   onChange={e => setFormData({...formData, name: e.target.value})}
@@ -304,22 +347,19 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
                   className="w-full p-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none font-mono bg-slate-50"
                 />
               </div>
-              <div className="flex gap-2 justify-end pt-2">
-                <button 
-                  onClick={handleSave} 
-                  className="bg-blue-600 text-white w-full py-3 rounded-lg flex items-center justify-center gap-2 font-bold hover:bg-blue-700 active:scale-95 transition-transform shadow-sm"
-                >
-                  <Save size={18} /> Zapisz w Bazie
-                </button>
-              </div>
+              <button 
+                onClick={handleSave} 
+                className="bg-blue-600 text-white w-full py-3 rounded-lg flex items-center justify-center gap-2 font-bold hover:bg-blue-700 active:scale-95 transition-transform"
+              >
+                <Save size={18} /> Zapisz w Bazie
+              </button>
             </div>
           </div>
         )}
 
-        {/* The List */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
           {locations.length === 0 ? (
-            <div className="p-10 text-center text-slate-400">Brak dodanych miejscowości.</div>
+            <div className="p-10 text-center text-slate-400">Brak danych. Skorzystaj z opcji Importu Excel poniżej.</div>
           ) : (
             <ul className="divide-y divide-slate-100">
               {locations.map(loc => (
@@ -330,27 +370,10 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
                       Stawka: <span className="font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{loc.rate.toFixed(2)} zł</span>
                     </div>
                   </div>
-                  
-                  {/* Buttons visible ONLY for Admin */}
-                  {mode === 'ADMIN' ? (
+                  {mode === 'ADMIN' && (
                       <div className="flex items-center gap-1">
-                        <button 
-                          onClick={() => openEditForm(loc)} 
-                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                        >
-                          <Edit2 size={18} />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(loc.id)} 
-                          className="p-2 text-slate-400 hover:text-danger hover:bg-red-50 rounded-lg transition"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                  ) : (
-                      // Driver View: Read Only Icon or nothing
-                      <div className="p-2 text-slate-300">
-                          <Lock size={14} />
+                        <button onClick={() => openEditForm(loc)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"><Edit2 size={18} /></button>
+                        <button onClick={() => handleDelete(loc.id)} className="p-2 text-slate-400 hover:text-danger hover:bg-red-50 rounded-lg transition"><Trash2 size={18} /></button>
                       </div>
                   )}
                 </li>
@@ -360,21 +383,35 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
         </div>
       </div>
 
-      {/* 3. FIXED FOOTER (Import/Export) - ONLY FOR ADMIN */}
+      {/* 3. FIXED FOOTER (Excel / JSON Import) - ONLY FOR ADMIN */}
       {mode === 'ADMIN' && (
         <div className="bg-white p-3 border-t border-slate-200 z-10 flex-none shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-            <h3 className="text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-wider text-center">Kopia Zapasowa (Import / Export)</h3>
-            <div className="grid grid-cols-2 gap-3">
-            <button onClick={handleExport} className="flex items-center justify-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 active:bg-slate-200 transition text-slate-700">
-                <Download size={18} className="text-slate-500" />
-                <span className="text-sm font-bold">Zapisz Bazę</span>
-            </button>
-            
-            <label className="flex items-center justify-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 active:bg-slate-200 transition cursor-pointer text-slate-700">
-                <Upload size={18} className="text-slate-500" />
-                <span className="text-sm font-bold">Wczytaj Bazę</span>
-                <input type="file" accept=".json" onChange={handleImport} className="hidden" />
-            </label>
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase mb-3 tracking-wider text-center">Narzędzia Importu i Kopii</h3>
+            <div className="grid grid-cols-3 gap-2">
+                
+                {/* Excel Import */}
+                <label className="flex flex-col items-center justify-center gap-1 p-2 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 active:bg-green-200 transition cursor-pointer text-green-700">
+                    <FileSpreadsheet size={20} />
+                    <span className="text-[10px] font-bold uppercase">Excel</span>
+                    <input type="file" accept=".xlsx, .xls" onChange={handleExcelImport} className="hidden" />
+                </label>
+
+                {/* JSON Import */}
+                <label className="flex flex-col items-center justify-center gap-1 p-2 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 active:bg-blue-200 transition cursor-pointer text-blue-700">
+                    <FileJson size={20} />
+                    <span className="text-[10px] font-bold uppercase">JSON</span>
+                    <input type="file" accept=".json" onChange={handleImportJson} className="hidden" />
+                </label>
+
+                {/* Export JSON */}
+                <button onClick={handleExport} className="flex flex-col items-center justify-center gap-1 p-2 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 active:bg-slate-200 transition text-slate-700">
+                    <Download size={20} />
+                    <span className="text-[10px] font-bold uppercase">Eksport</span>
+                </button>
+
+            </div>
+            <div className="mt-2 text-[8px] text-center text-slate-400 italic">
+                W Excelu wymagane nagłówki: "Nazwa" (lub Miejscowość) oraz "Stawka".
             </div>
         </div>
       )}

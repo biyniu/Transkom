@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import { useState, useEffect } from 'react';
 import { Home, PlusCircle, Settings as SettingsIcon, MapPin, FileText } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import DayEditor from './components/DayEditor';
@@ -28,7 +29,6 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // Check login status
     const settings = StorageService.getSettings();
     if (settings.driverId) {
       setIsLoggedIn(true);
@@ -38,18 +38,24 @@ const App: React.FC = () => {
 
   const initializeData = async (driverId: string) => {
     setIsLoading(true);
-    // 1. Fetch Locations (Global)
-    const locations = await ApiService.fetchLocations();
-    if (locations) {
-        StorageService.saveLocations(locations);
+    try {
+        // Pobierz lokalizacje z chmury
+        const locations = await ApiService.fetchLocations();
+        if (locations && locations.length > 0) {
+            StorageService.saveLocations(locations, false);
+        }
+
+        // Pobierz dni pracy kierowcy
+        const days = await ApiService.fetchDriverData(driverId);
+        if (days && days.length > 0) {
+            StorageService.saveWorkDays(days);
+            setRefreshTrigger(prev => prev + 1);
+        }
+    } catch (e) {
+        console.warn("Błąd inicjalizacji danych z chmury. Używam danych lokalnych.");
+    } finally {
+        setIsLoading(false);
     }
-    // 2. Fetch Driver Data
-    const days = await ApiService.fetchDriverData(driverId);
-    if (days) {
-        StorageService.saveWorkDays(days);
-        setRefreshTrigger(prev => prev + 1);
-    }
-    setIsLoading(false);
   };
 
   const handleLogin = () => {
@@ -83,7 +89,8 @@ const App: React.FC = () => {
   if (!isLoggedIn) {
     return (
         <>
-            <Login onLogin={handleLogin} />
+            {showAdmin && <AdminPanel onClose={() => setShowAdmin(false)} />}
+            <Login onLogin={handleLogin} onOpenAdmin={() => setShowAdmin(true)} />
             <InstallPrompt />
         </>
     );
@@ -91,18 +98,17 @@ const App: React.FC = () => {
 
   return (
     <div className="h-[100dvh] w-full flex flex-col bg-slate-50 text-slate-900 font-sans overflow-hidden relative">
-      
-      {/* Install Prompt (Shows only if criteria met) */}
       <InstallPrompt />
 
-      {/* Loading Overlay */}
       {isLoading && (
         <div className="absolute inset-0 z-[60] bg-white/80 backdrop-blur-sm flex items-center justify-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            <div className="flex flex-col items-center gap-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                <p className="text-xs font-bold text-slate-500 animate-pulse uppercase tracking-widest">Synchronizacja z Firebase...</p>
+            </div>
         </div>
       )}
 
-      {/* Admin Panel Overlay */}
       {showAdmin && (
           <AdminPanel onClose={() => setShowAdmin(false)} />
       )}
@@ -119,7 +125,6 @@ const App: React.FC = () => {
           </div>
         )}
         {currentView === View.LOCATIONS && (
-          // Driver View: Can ADD but NOT Edit
           <div className="flex-1 overflow-hidden">
              <LocationsManager mode="DRIVER" />
           </div>
@@ -132,7 +137,6 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Bottom Navigation */}
       {currentView !== View.EDITOR && (
         <nav className="h-20 bg-white border-t border-slate-200 flex justify-around items-center px-2 pb-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-40 flex-none">
           <button 

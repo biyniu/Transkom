@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pl">
   <head>
@@ -33,17 +34,15 @@
       /* Mobile optimization */
       html, body {
         height: 100%;
-        overflow: hidden; /* App handles scrolling internally */
+        overflow: hidden;
       }
       body {
         -webkit-tap-highlight-color: transparent;
         background-color: #f8fafc;
       }
       input, select, textarea {
-        font-size: 16px; /* Prevents iOS zoom on focus */
+        font-size: 16px;
       }
-      
-      /* Custom Visible Scrollbar */
       ::-webkit-scrollbar {
         width: 6px;
         height: 6px;
@@ -54,9 +53,6 @@
       ::-webkit-scrollbar-thumb {
         background: #cbd5e1; 
         border-radius: 3px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #94a3b8; 
       }
     </style>
   <script type="importmap">
@@ -71,7 +67,11 @@
     "date-fns/": "https://esm.sh/date-fns@^4.1.0/",
     "date-fns": "https://esm.sh/date-fns@^4.1.0",
     "jspdf": "https://esm.sh/jspdf@2.5.1",
-    "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.8.2"
+    "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.8.2",
+    "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js",
+    "firebase/": "https://esm.sh/firebase@^12.9.0/",
+    "xlsx": "https://esm.sh/xlsx@0.18.5"
   }
 }
 </script>
