@@ -14,6 +14,7 @@ interface SettingsProps {
 const Settings: React.FC<SettingsProps> = ({ onOpenAdmin, onLogout }) => {
   const [settings, setSettings] = useState<AppSettings>(StorageService.getSettings());
   const [message, setMessage] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const handleSave = () => {
     StorageService.saveSettings(settings);
@@ -30,11 +31,16 @@ const Settings: React.FC<SettingsProps> = ({ onOpenAdmin, onLogout }) => {
   };
 
   const handleGlobalRateRefresh = () => {
-    if (confirm("Zaktualizować stawki w kursach z 2 ostatnich miesięcy?")) {
+    // Uruchamiamy proces naprawy i aktualizacji
+    setIsUpdating(true);
+    
+    // setTimeout pozwala UI odświeżyć się i pokazać spinner przed ciężkimi obliczeniami
+    setTimeout(() => {
         const count = StorageService.updateRecentHistoryRates();
-        setMessage(count > 0 ? `Zaktualizowano ${count} dni!` : 'Kursy są już aktualne.');
+        setMessage(`Sprawdzono kursy. Zaktualizowano: ${count} dni.`);
+        setIsUpdating(false);
         setTimeout(() => setMessage(''), 3000);
-    }
+    }, 500);
   };
 
   const isConnected = ApiService.isFirebaseConfigured();
@@ -84,12 +90,18 @@ const Settings: React.FC<SettingsProps> = ({ onOpenAdmin, onLogout }) => {
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-4">
            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-50 pb-2">Narzędzia</h3>
            
-           <button onClick={handleGlobalRateRefresh} className="w-full flex items-center justify-between p-3 bg-indigo-50 rounded-xl border border-indigo-100 text-indigo-700 group">
+           <button 
+                onClick={handleGlobalRateRefresh} 
+                disabled={isUpdating}
+                className="w-full flex items-center justify-between p-3 bg-indigo-50 rounded-xl border border-indigo-100 text-indigo-700 group disabled:opacity-70 disabled:cursor-not-allowed"
+           >
                <div className="text-left">
                    <div className="font-bold text-sm">Synchronizuj Stawki</div>
-                   <div className="text-[10px] opacity-70">Aktualizuje ceny w starych kursach</div>
+                   <div className="text-[10px] opacity-70">
+                       {isUpdating ? 'Przetwarzanie danych...' : 'Wymuś aktualizację (Obecny i Poprzedni msc)'}
+                   </div>
                </div>
-               <RefreshCw size={20} className="group-active:rotate-180 transition-transform duration-500" />
+               <RefreshCw size={20} className={`transition-transform duration-700 ${isUpdating ? 'animate-spin' : 'group-active:rotate-180'}`} />
            </button>
         </div>
 
