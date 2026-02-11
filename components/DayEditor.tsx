@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, Save, ArrowLeft, Clock, Search, X, Wrench, Hourglass, Thermometer, Moon } from 'lucide-react';
+import { Plus, Trash2, Save, ArrowLeft, Clock, Search, X, Wrench, Hourglass, Thermometer, Moon, Briefcase, AlertTriangle } from 'lucide-react';
 import { WorkDay, DayType, LocationRate, Trip, AppSettings } from '../types';
 import * as StorageService from '../services/storage';
 
@@ -16,12 +17,13 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
   // Local UI states to keep inputs visible even if value is 0 during typing
   const [showWorkshop, setShowWorkshop] = useState(false);
   const [showWaiting, setShowWaiting] = useState(false);
+  const [showExtraHourly, setShowExtraHourly] = useState(false);
   
   // State for Daily Rest Calculation
   const [restInfo, setRestInfo] = useState<{ label: string; colorClass: string } | null>(null);
 
   const [day, setDay] = useState<WorkDay>({
-    id: uuidv4(),
+    id: new Date().toISOString().slice(0, 10), // Default ID is today's date
     date: new Date().toISOString().slice(0, 10),
     type: DayType.WORK,
     startTime: '04:00',
@@ -32,6 +34,8 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
     waitingHours: 0,
     waitingNote: '',
     totalWaiting: 0,
+    extraHourlyHours: 0,
+    totalExtraHourly: 0,
     totalAmount: 0,
     totalBonus: 0,
     totalHourlyBonus: 0,
@@ -49,11 +53,13 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
         // Initialize toggles based on existing data
         setShowWorkshop((existingDay.workshopHours || 0) > 0);
         setShowWaiting((existingDay.waitingHours || 0) > 0);
+        setShowExtraHourly((existingDay.extraHourlyHours || 0) > 0);
       }
     } else {
         // Reset toggles for new day
         setShowWorkshop(false);
         setShowWaiting(false);
+        setShowExtraHourly(false);
     }
   }, [dayId]);
 
@@ -70,7 +76,8 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
 
     const allDays = StorageService.getWorkDays();
     // Filter out current day (in case we are editing an existing one) to find the previous one correctly
-    const otherDays = allDays.filter(d => d.id !== day.id && d.type === DayType.WORK);
+    // We filter by ID, but since we might be changing ID (migration), we also filter by strictly different date just in case
+    const otherDays = allDays.filter(d => d.id !== dayId && d.date !== day.date && d.type === DayType.WORK);
     
     // Sort descending by date
     const sorted = otherDays.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -89,8 +96,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
     let prevEndDate = new Date(`${prevDay.date}T${prevDay.endTime}`);
     const prevStartDate = new Date(`${prevDay.date}T${prevDay.startTime}`);
     
-    // Handle overnight shift (if End is before Start, assume it implies next day)
-    // OR if duration logic implies it. Simple check: if End <= Start, it ends +1 day.
+    // Handle overnight shift
     if (prevEndDate <= prevStartDate) {
         prevEndDate.setDate(prevEndDate.getDate() + 1);
     }
@@ -114,10 +120,6 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
     const hours = Math.floor(diffMins / 60);
     const mins = diffMins % 60;
 
-    // Determine Color based on legal limits (approx rules)
-    // > 11h: Green (Standard daily rest)
-    // 9h - 11h: Orange (Reduced daily rest)
-    // < 9h: Red (Violation)
     let colorClass = "bg-green-50 text-green-700 border-green-200"; // Safe
     
     if (hours < 9) {
@@ -135,32 +137,22 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
   const handleTripChange = (tripId: string, field: keyof Trip, value: any) => {
     const updatedTrips = day.trips.map(trip => {
       if (trip.id !== tripId) return trip;
-      
       const newTrip = { ...trip, [field]: value };
-      
-      // Auto-update rate if location changes
       if (field === 'locationId') {
         const loc = locations.find(l => l.id === value);
         if (loc) {
           newTrip.locationName = loc.name;
           newTrip.rate = loc.rate;
-
-          // LOGIC CHANGE: If rate > 10, assume it's a fixed price per trip, not per ton.
-          // Force weight/quantity to 1.
           if (loc.rate > 10) {
             newTrip.weight = 1;
           }
         }
       }
-
-      // Recalculate amounts
       const { amount, bonus } = StorageService.calculateTrip(newTrip.weight, newTrip.rate);
       newTrip.amount = amount;
       newTrip.bonus = bonus;
-      
       return newTrip;
     });
-
     setDay({ ...day, trips: updatedTrips });
   };
 
@@ -187,8 +179,28 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
   };
 
   const handleSave = () => {
-    // Clean up values before saving if toggles are off
+    // 1. Check for Overwrites
+    // We are about to save with ID = day.date
+    const targetId = day.date;
+    const existingDay = StorageService.getDayById(targetId);
+
+    // If a day with this date ALREADY exists...
+    if (existingDay) {
+        // AND we are NOT simply editing that same day (i.e., we are creating new, or changing date of another day)
+        if (dayId !== targetId) {
+            const confirmed = window.confirm(
+                `UWAGA: Istnieje już zapisany dzień z datą ${targetId}!\n\nCzy chcesz go NADPISAĆ? Poprzednie dane z tego dnia zostaną utracone.`
+            );
+            if (!confirmed) return;
+        }
+    }
+
     const dayToSave = { ...day };
+    
+    // FORCE ID TO BE THE DATE
+    // This ensures Firestore docs are named "YYYY-MM-DD"
+    dayToSave.id = dayToSave.date;
+
     if (!showWorkshop) {
         dayToSave.workshopHours = 0;
         dayToSave.totalWorkshop = 0;
@@ -198,8 +210,25 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
         dayToSave.totalWaiting = 0;
         dayToSave.waitingNote = '';
     }
+    if (!showExtraHourly) {
+        dayToSave.extraHourlyHours = 0;
+        dayToSave.totalExtraHourly = 0;
+    }
 
+    // 2. Save the new/updated day
     StorageService.saveDay(dayToSave);
+
+    // 3. MIGRATION LOGIC:
+    // If we were editing an existing day (dayId is not null),
+    // and the old ID (dayId) is different from the new ID (dayToSave.id aka the date),
+    // it means either:
+    // a) We changed the date of an entry
+    // b) We are saving an old entry that had a UUID, and converting it to Date ID
+    // In both cases, we must DELETE the old entry to avoid duplicates.
+    if (dayId && dayId !== dayToSave.id) {
+        StorageService.deleteDay(dayId);
+    }
+
     onClose();
   };
 
@@ -207,7 +236,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
     const newState = !showWorkshop;
     setShowWorkshop(newState);
     if (newState) {
-      setDay({ ...day, workshopHours: 1 }); // Default to 1h when enabled
+      setDay({ ...day, workshopHours: 1 });
     } else {
       setDay({ ...day, workshopHours: 0 });
     }
@@ -217,18 +246,26 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
     const newState = !showWaiting;
     setShowWaiting(newState);
     if (newState) {
-      setDay({ ...day, waitingHours: 1 }); // Default to 1h when enabled
+      setDay({ ...day, waitingHours: 1 });
     } else {
       setDay({ ...day, waitingHours: 0, waitingNote: '' });
     }
   };
 
-  // Live calculation for preview
+  const toggleExtraHourly = () => {
+    const newState = !showExtraHourly;
+    setShowExtraHourly(newState);
+    if (newState) {
+      setDay({ ...day, extraHourlyHours: 1 });
+    } else {
+      setDay({ ...day, extraHourlyHours: 0 });
+    }
+  };
+
   const totals = StorageService.calculateDayTotals(day);
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
-      {/* Header - Fixed Top */}
       <div className="bg-white border-b border-slate-200 p-4 flex items-center justify-between sticky top-0 z-20 shadow-sm flex-none">
         <button onClick={onClose} className="p-2 text-slate-600 hover:bg-slate-100 rounded-full">
           <ArrowLeft size={24} />
@@ -245,10 +282,8 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
         </button>
       </div>
 
-      {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         
-        {/* Basic Info */}
         <section className="bg-white p-4 rounded-xl shadow-sm space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -297,7 +332,6 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                     </div>
                 </div>
 
-                {/* Daily Rest Display */}
                 {restInfo && (
                     <div className={`mt-3 px-3 py-2 rounded-lg border flex items-center justify-between shadow-sm ${restInfo.colorClass}`}>
                         <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide opacity-90">
@@ -312,22 +346,6 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
           )}
         </section>
 
-        {/* Info Box for specific day types */}
-        {day.type === DayType.VACATION && (
-          <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-xl text-yellow-800 text-sm flex items-center gap-2">
-            <Clock size={18} />
-            Stawka za urlop zostanie przeliczona automatycznie wg puli (Stary/Nowy).
-          </div>
-        )}
-
-        {day.type === DayType.SICK_LEAVE && (
-          <div className="bg-purple-50 border border-purple-200 p-4 rounded-xl text-purple-800 text-sm flex items-center gap-2">
-            <Thermometer size={18} />
-            Dla L4 naliczana jest stała stawka <strong>{settings.sickLeaveRate} PLN</strong>.
-          </div>
-        )}
-
-        {/* Extra Options: Workshop & Waiting */}
         {day.type === DayType.WORK && (
           <section className="bg-white p-4 rounded-xl shadow-sm space-y-4">
              {/* Workshop Toggle */}
@@ -410,10 +428,47 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                     </div>
                 )}
              </div>
+
+             <hr className="border-slate-100" />
+
+             {/* Extra Hourly Work Toggle */}
+             <div>
+                <label className="flex items-center gap-3 cursor-pointer">
+                    <input 
+                    type="checkbox" 
+                    checked={showExtraHourly}
+                    onChange={toggleExtraHourly}
+                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                    />
+                    <div className="flex items-center gap-2 text-slate-700 font-medium">
+                    <Briefcase size={18} className="text-slate-500" />
+                    Praca na Godziny ({settings.extraHourlyRate} zł/h)
+                    </div>
+                </label>
+                
+                {showExtraHourly && (
+                    <div className="mt-2 pl-8 animate-fade-in">
+                        <div className="flex items-center gap-2">
+                            <input 
+                            type="number"
+                            step="0.5"
+                            value={day.extraHourlyHours === 0 ? '' : day.extraHourlyHours}
+                            placeholder="0"
+                            onChange={e => {
+                                const val = parseFloat(e.target.value);
+                                setDay({...day, extraHourlyHours: isNaN(val) ? 0 : val});
+                            }}
+                            className="w-24 p-2 border border-slate-300 rounded-lg text-center font-bold"
+                            />
+                            <span className="text-slate-500 font-medium">h = </span>
+                            <span className="text-green-600 font-bold">{((day.extraHourlyHours || 0) * settings.extraHourlyRate).toFixed(2)} zł</span>
+                        </div>
+                    </div>
+                )}
+             </div>
           </section>
         )}
 
-        {/* Trips Section */}
         {day.type === DayType.WORK && (
           <section className="space-y-4 animate-fade-in">
             <h3 className="text-sm font-semibold text-slate-700 px-1 uppercase tracking-wider">Lista Kursów</h3>
@@ -428,7 +483,6 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
               />
             ))}
 
-             {/* Big Add Button */}
              <button 
                 onClick={addTrip}
                 className="w-full py-4 rounded-xl bg-primary text-white text-lg font-bold shadow-md shadow-blue-200 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
@@ -436,7 +490,6 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                 <Plus size={24} /> Dodaj kurs
               </button>
 
-             {/* Big Save Button */}
              <button 
                 onClick={handleSave}
                 className="w-full py-4 rounded-xl bg-green-600 text-white text-lg font-bold shadow-md shadow-green-200 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
@@ -446,7 +499,6 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
           </section>
         )}
         
-        {/* Note */}
         <div className="bg-white p-4 rounded-xl shadow-sm">
            <label className="block text-xs font-medium text-slate-500 mb-1">Notatki / Tankowanie</label>
            <textarea 
@@ -460,7 +512,6 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
 
       </div>
 
-      {/* Live Summary Footer - Fixed Block at bottom (not floating) */}
       <div className="bg-slate-800 text-white p-4 shadow-lg space-y-2 flex-none z-20">
            {day.type === DayType.WORK && (
              <>
@@ -470,8 +521,10 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
              </div>
              <div className="flex justify-between text-sm text-slate-300">
                 <span>Godziny: {(totals.totalHourlyBonus / settings.hourlyRate).toFixed(1)} h (+ {totals.totalHourlyBonus.toFixed(2)} zł)</span>
-                {/* Simplified Extras display */}
                 <div className="text-right">
+                    {showExtraHourly && totals.totalExtraHourly > 0 ? (
+                        <span className="block text-blue-300 text-xs">Dodatkowe: {totals.totalExtraHourly.toFixed(2)} zł</span>
+                    ) : null}
                     {showWorkshop && totals.totalWorkshop > 0 ? (
                         <span className="block text-orange-300 text-xs">Warsztat: {totals.totalWorkshop.toFixed(2)} zł</span>
                     ) : null}
@@ -485,7 +538,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
            <div className="flex justify-between items-end border-t border-slate-600 pt-2">
               <span className="text-slate-300">Zarobek całkowity:</span>
               <span className="text-2xl font-bold text-green-400">
-                {(totals.totalAmount + totals.totalBonus + (totals.totalHourlyBonus || 0) + (totals.totalWorkshop || 0) + (totals.totalWaiting || 0)).toFixed(2)} zł
+                {(totals.totalAmount + totals.totalBonus + (totals.totalHourlyBonus || 0) + (totals.totalWorkshop || 0) + (totals.totalWaiting || 0) + (totals.totalExtraHourly || 0)).toFixed(2)} zł
               </span>
            </div>
       </div>
@@ -493,7 +546,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
   );
 };
 
-// Sub-component for Trip Card to handle Search State efficiently
+// Sub-component for Trip Card
 const TripCard: React.FC<{
   trip: Trip;
   locations: LocationRate[];
@@ -504,7 +557,6 @@ const TripCard: React.FC<{
   const [isSearching, setIsSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Initialize search term if trip has location
   useEffect(() => {
     if (trip.locationName && !isSearching) {
       setSearchTerm(trip.locationName);
@@ -521,19 +573,11 @@ const TripCard: React.FC<{
     onChange('locationId', loc.id);
   };
 
-  const handleSearchFocus = () => {
-    setIsSearching(true);
-    setSearchTerm(''); // Clear to show all or let user type
-    onChange('locationId', ''); // Clear current selection
-  };
-
-  // Check if fixed rate (lump sum)
   const isFixedRate = trip.rate > 10;
 
   return (
     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 relative">
       <div className="grid grid-cols-12 gap-3">
-        {/* Searchable Location Input */}
         <div className="col-span-12 relative">
           <label className="block text-xs font-medium text-slate-500 mb-1">Miejscowość</label>
           <div className="relative">
@@ -559,7 +603,6 @@ const TripCard: React.FC<{
              )}
           </div>
 
-          {/* Dropdown List */}
           {isSearching && (
             <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
               {filteredLocations.length === 0 ? (

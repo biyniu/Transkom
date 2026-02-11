@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Trash2, Plus, User, Users, Key, RefreshCw, AlertCircle } from 'lucide-react';
@@ -14,8 +15,6 @@ const DriversManager: React.FC = () => {
 
   useEffect(() => {
     // CRITICAL FIX: Always fetch latest drivers from cloud when opening manager.
-    // This prevents the "Overwrite" bug where an empty local app sends an empty list + 1 new driver,
-    // deleting everyone else from the cloud.
     refreshDrivers();
   }, []);
 
@@ -25,12 +24,17 @@ const DriversManager: React.FC = () => {
       setDrivers(StorageService.getDrivers());
 
       // 2. Fetch from cloud
-      const cloudDrivers = await ApiService.fetchDrivers();
-      if (cloudDrivers) {
-          StorageService.saveDrivers(cloudDrivers, false); // Update local, don't sync back yet
-          setDrivers(cloudDrivers);
+      try {
+        const cloudDrivers = await ApiService.fetchDrivers();
+        if (cloudDrivers && cloudDrivers.length > 0) {
+            StorageService.saveDrivers(cloudDrivers, false); // Update local, don't sync back yet
+            setDrivers(cloudDrivers);
+        }
+      } catch (e) {
+          console.warn("Could not refresh drivers from cloud", e);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
   };
 
   const handleAdd = async () => {
@@ -41,7 +45,6 @@ const DriversManager: React.FC = () => {
     }
 
     // Refresh one last time to be safe before writing
-    // (Optimization: In a real app we might skip this, but here safety is priority)
     const currentDrivers = drivers; 
 
     // Check if code exists

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Trash2, Plus, Download, Upload, Save, X, Edit2, Database, Lock, Info, TableProperties, RefreshCw, FileSpreadsheet, FileJson } from 'lucide-react';
+import { Trash2, Plus, Download, Upload, Save, X, Edit2, Database, Lock, Info, TableProperties, RefreshCw, FileSpreadsheet, FileJson, Search } from 'lucide-react';
 import { LocationRate } from '../types';
 import * as StorageService from '../services/storage';
 import * as XLSX from 'xlsx';
@@ -41,6 +41,7 @@ const RATE_TABLE_DATA = [
 
 const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) => {
   const [locations, setLocations] = useState<LocationRate[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', rate: '' });
@@ -208,12 +209,16 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
     }
   };
 
+  const filteredLocations = locations.filter(loc => 
+    loc.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="flex flex-col h-full bg-slate-50">
       
       {/* 1. FIXED HEADER */}
       <div className="bg-white p-4 shadow-sm border-b border-slate-200 z-10 flex-none">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center mb-3">
           <div>
             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
               <Database size={20} className="text-primary"/> Baza Miejscowości
@@ -240,6 +245,28 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
               <Plus size={16} /> Dodaj Nowy
             </button>
           </div>
+        </div>
+
+        {/* Search Bar */}
+        <div className="relative">
+          <div className="absolute left-3 top-2.5 text-slate-400">
+            <Search size={18} />
+          </div>
+          <input 
+            type="text"
+            placeholder="Wyszukaj miejscowość..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-10 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-sm"
+          />
+          {searchTerm && (
+            <button 
+              onClick={() => setSearchTerm('')}
+              className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+            >
+              <X size={18} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -358,11 +385,13 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
         )}
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-          {locations.length === 0 ? (
-            <div className="p-10 text-center text-slate-400">Brak danych. Skorzystaj z opcji Importu Excel poniżej.</div>
+          {filteredLocations.length === 0 ? (
+            <div className="p-10 text-center text-slate-400">
+              {searchTerm ? 'Nie znaleziono żadnej miejscowości pasującej do wyszukiwania.' : 'Baza jest pusta. Skorzystaj z opcji Importu Excel poniżej.'}
+            </div>
           ) : (
             <ul className="divide-y divide-slate-100">
-              {locations.map(loc => (
+              {filteredLocations.map(loc => (
                 <li key={loc.id} className="p-3 pl-4 flex justify-between items-center hover:bg-slate-50 transition-colors">
                   <div className="flex-1 pr-2">
                     <div className="font-semibold text-slate-800 text-sm leading-tight">{loc.name}</div>

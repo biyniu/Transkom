@@ -1,3 +1,4 @@
+
 export interface LocationRate {
   id: string;
   name: string;
@@ -30,7 +31,8 @@ export interface AppSettings {
   vacationRateOld: number; // Stara stawka za urlop (np. 210)
   vacationRateNew: number; // Nowa stawka za urlop (np. 230)
   sickLeaveRate: number; // Stawka za L4 (domyślnie 150)
-  hourlyRate: number; // Stawka godzinowa (domyślnie 4.5)
+  hourlyRate: number; // Stawka godzinowa (domyślnie 4.5) - premia za czas
+  extraHourlyRate: number; // NOWA: Stawka za konkretną pracę na godziny (np. 20)
   workshopRate: number; // Stawka za warsztat (domyślnie 10)
   waitingRate: number; // Stawka za postój (domyślnie 8)
   
@@ -59,6 +61,9 @@ export interface WorkDay {
   waitingHours?: number; // Ilość godzin oczekiwania
   waitingNote?: string; // Miejsce postoju
   totalWaiting?: number; // Zarobek z oczekiwania (h * 8)
+
+  extraHourlyHours?: number; // NOWA: Ilość godzin pracy dodatkowej
+  totalExtraHourly?: number; // NOWA: Zarobek z pracy dodatkowej (h * extraHourlyRate)
 
   totalWeight: number; // Suma ton
   note: string;

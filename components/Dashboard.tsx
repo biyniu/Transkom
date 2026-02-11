@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { TrendingUp, Calendar, Briefcase, Truck, Wrench, Hourglass, Plus, PlusCircle, Thermometer, Palmtree, Trash2, Edit, Moon } from 'lucide-react';
 import { WorkDay, DayType } from '../types';
 import * as StorageService from '../services/storage';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Cell, LabelList } from 'recharts';
+import React, { useEffect, useState } from 'react';
 
 interface DashboardProps {
   onEditDay: (id: string) => void;
@@ -37,8 +38,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
     });
 
     const earned = selectedMonthDays.reduce((acc, d) => {
-      // Sum: Trips + Fuel Bonus + Hourly Bonus + Workshop + Waiting
-      return acc + d.totalAmount + d.totalBonus + (d.totalHourlyBonus || 0) + (d.totalWorkshop || 0) + (d.totalWaiting || 0);
+      // Sum: Trips + Fuel Bonus + Hourly Bonus + Workshop + Waiting + Extra Hourly Work
+      return acc + d.totalAmount + d.totalBonus + (d.totalHourlyBonus || 0) + (d.totalWorkshop || 0) + (d.totalWaiting || 0) + (d.totalExtraHourly || 0);
     }, 0);
 
     const tons = selectedMonthDays.reduce((acc, d) => acc + d.totalWeight, 0);
@@ -138,7 +139,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
       return {
         name: `${String(dayNum).padStart(2, '0')}.${String(month + 1).padStart(2, '0')}`, // dd.MM
         fullDate: dateStr,
-        zarobek: day ? Math.round(day.totalAmount + day.totalBonus + (day.totalHourlyBonus || 0) + (day.totalWorkshop || 0) + (day.totalWaiting || 0)) : 0,
+        zarobek: day ? Math.round(day.totalAmount + day.totalBonus + (day.totalHourlyBonus || 0) + (day.totalWorkshop || 0) + (day.totalWaiting || 0) + (day.totalExtraHourly || 0)) : 0,
         type: day?.type,
         isToday
       };
@@ -155,12 +156,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
   // Calculate Chart Width (e.g., 50px per day ensures it's scrollable)
   const chartWidth = Math.max(daysInMonth * 55, window.innerWidth - 40);
 
-  // Filter History List based on toggle
+  // Filter History List based on toggle and SORT DESCENDING by date
   const getHistoryDays = () => {
-    return days.filter(d => {
+    return days
+      .filter(d => {
         const dDate = parseISO(d.date);
         return dDate.getMonth() === month && dDate.getFullYear() === year;
-    });
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
 
   const filteredHistory = getHistoryDays();
@@ -351,7 +354,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                     {day.type === DayType.WORK ? (
                       <>
                         <div className="font-bold text-green-600">
-                          +{(day.totalAmount + day.totalBonus + (day.totalHourlyBonus || 0) + (day.totalWorkshop || 0) + (day.totalWaiting || 0)).toFixed(2)} zł
+                          +{(day.totalAmount + day.totalBonus + (day.totalHourlyBonus || 0) + (day.totalWorkshop || 0) + (day.totalWaiting || 0) + (day.totalExtraHourly || 0)).toFixed(2)} zł
                         </div>
                         <div className="text-xs text-slate-400">{day.trips.length} kursy</div>
                       </>
@@ -372,10 +375,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                   </div>
                 </div>
                 
-                {/* Mini preview of trips + workshop if work day */}
+                {/* Mini preview of trips + extra work */}
                 {day.type === DayType.WORK && (
                   <>
                   <div className="mt-2 pt-2 border-t border-slate-50 text-xs text-slate-500 truncate flex flex-wrap gap-2">
+                    {day.totalExtraHourly && day.totalExtraHourly > 0 ? (
+                        <span className="flex items-center gap-1 text-indigo-500 font-semibold"><Briefcase size={12}/> Praca na godziny</span>
+                    ) : null}
                     {day.totalWorkshop && day.totalWorkshop > 0 ? (
                         <span className="flex items-center gap-1 text-orange-500 font-semibold"><Wrench size={12}/> Warsztat</span>
                     ) : null}

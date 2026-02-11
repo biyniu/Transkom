@@ -1,6 +1,5 @@
 
-
-// Fix: Import React to resolve 'Cannot find namespace React' error
+// Fix: Added React import to resolve missing 'React' namespace
 import React, { useState, useEffect } from 'react';
 import { Truck, LogIn, Lock, AlertCircle, RefreshCw, Database } from 'lucide-react';
 import * as StorageService from '../services/storage';
@@ -34,14 +33,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, onOpenAdmin }) => {
             if (fetchedDrivers && fetchedDrivers.length > 0) {
                 StorageService.saveDrivers(fetchedDrivers, false);
             } else {
-                // Jeśli baza jest pusta, sprawdź czy mamy kogoś lokalnie
                 const localDrivers = StorageService.getDrivers();
                 if (localDrivers.length === 0) {
-                     setError('Baza kierowców jest pusta. Dodaj kierowców w Panelu Admina.');
+                     setError('Baza kierowców w chmurze jest pusta.');
                 }
             }
-        } catch (e) {
-            setError('Błąd połączenia z bazą danych Firebase. Sprawdź internet.');
+        } catch (e: any) {
+            setError(e.message || 'Błąd połączenia z Firebase.');
         } finally {
             setIsLoading(false);
         }
@@ -101,8 +99,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, onOpenAdmin }) => {
                     </div>
                     
                     {error && (
-                        <div className="flex items-center justify-center gap-2 text-red-600 text-[10px] font-bold bg-red-50 p-3 rounded-lg animate-fade-in border border-red-100 leading-tight">
-                            <AlertCircle size={14} className="shrink-0"/> {error}
+                        <div className="flex flex-col items-center gap-2 text-red-600 text-[10px] font-bold bg-red-50 p-3 rounded-lg animate-fade-in border border-red-100 leading-tight">
+                            <div className="flex items-center gap-2">
+                                <AlertCircle size={14} className="shrink-0"/>
+                                <span>WYSTĄPIŁ PROBLEM</span>
+                            </div>
+                            <p className="text-center opacity-80">{error}</p>
                         </div>
                     )}
 
@@ -131,7 +133,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onOpenAdmin }) => {
                 <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Firebase Cloud Storage</p>
             </div>
 
-            {/* Przycisk Panelu Admina w prawym dolnym rogu */}
             <button 
                 onClick={onOpenAdmin}
                 className="fixed bottom-6 right-6 p-3 bg-white text-slate-300 hover:text-slate-800 rounded-full shadow-md border border-slate-100 transition-all active:scale-90"

@@ -10,13 +10,6 @@ const STORAGE_KEYS = {
   SETTINGS: 'kierowcapro_settings',
 };
 
-// Flaga blokująca wysyłkę do Firebase podczas pobierania danych
-let isInitialSyncing = false;
-
-export const setInitialSyncing = (val: boolean) => {
-    isInitialSyncing = val;
-};
-
 const INITIAL_LOCATIONS: LocationRate[] = [
   { id: '1', name: 'Siemianowice DOMBUD', rate: 2.85 },
   { id: 'extra3', name: 'MATERIAŁ FREZY', rate: 9 },
@@ -27,6 +20,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   vacationRateNew: 230,
   sickLeaveRate: 150,
   hourlyRate: 4.5,
+  extraHourlyRate: 15,
   workshopRate: 10,
   waitingRate: 8,
   totalVacationDays: 30,
@@ -38,8 +32,11 @@ export const getSettings = (): AppSettings => {
   return data ? JSON.parse(data) : DEFAULT_SETTINGS;
 };
 
-export const saveSettings = (settings: AppSettings) => {
+export const saveSettings = (settings: AppSettings, sync = true) => {
   localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+  if (sync && settings.driverId) {
+    ApiService.syncSettings(settings.driverId, settings);
+  }
 };
 
 export const getLocations = (): LocationRate[] => {
@@ -49,7 +46,7 @@ export const getLocations = (): LocationRate[] => {
 
 export const saveLocations = (locations: LocationRate[], sync = true) => {
   localStorage.setItem(STORAGE_KEYS.LOCATIONS, JSON.stringify(locations));
-  if (sync && !isInitialSyncing) {
+  if (sync) {
       ApiService.syncLocations(locations);
   }
 };
@@ -61,25 +58,26 @@ export const getDrivers = (): Driver[] => {
 
 export const saveDrivers = (drivers: Driver[], sync = true) => {
   localStorage.setItem(STORAGE_KEYS.DRIVERS, JSON.stringify(drivers));
-  if (sync && !isInitialSyncing) {
+  if (sync) {
     ApiService.syncDrivers(drivers);
   }
 };
 
 export const getWorkDays = (): WorkDay[] => {
   const data = localStorage.getItem(STORAGE_KEYS.DAYS);
-  return data ? JSON.parse(data) : [];
+  const days: WorkDay[] = data ? JSON.parse(data) : [];
+  // Zawsze zwracaj posortowane, aby Dashboard miał bazę do wyświetlania
+  return days.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 };
 
 export const saveWorkDays = (days: WorkDay[], sync = true) => {
-  localStorage.setItem(STORAGE_KEYS.DAYS, JSON.stringify(days));
-  const settings = getSettings();
-  
-  // Synchronizuj z Firebase tylko jeśli NIE trwa pobieranie początkowe 
-  // i jeśli jawnie tego chcemy (sync=true)
-  if (sync && !isInitialSyncing && settings.driverId) {
-    console.log("Storage: Synchronizacja kursów z Firebase...");
-    ApiService.syncDriverData(settings.driverId, days);
+  const sortedDays = days.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  localStorage.setItem(STORAGE_KEYS.DAYS, JSON.stringify(sortedDays));
+  if (sync) {
+    const settings = getSettings();
+    if (settings.driverId) {
+        ApiService.syncAllDays(settings.driverId, sortedDays);
+    }
   }
 };
 
@@ -110,7 +108,7 @@ const recalculateVacations = (allDays: WorkDay[]): WorkDay[] => {
         });
     });
 
-    return updatedDays;
+    return updatedDays.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 };
 
 export const saveDay = (day: WorkDay) => {
@@ -126,16 +124,30 @@ export const saveDay = (day: WorkDay) => {
 
   if (calculatedDay.type === DayType.VACATION || days.some(d => d.type === DayType.VACATION)) {
       days = recalculateVacations(days);
+      saveWorkDays(days, true);
+  } else {
+      const sortedDays = days.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      localStorage.setItem(STORAGE_KEYS.DAYS, JSON.stringify(sortedDays));
+      const settings = getSettings();
+      if (settings.driverId) {
+          ApiService.syncSingleDay(settings.driverId, calculatedDay);
+      }
   }
-
-  days.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  saveWorkDays(days);
 };
 
 export const deleteDay = (id: string) => {
-  let days = getWorkDays().filter((d) => d.id !== id);
-  days = recalculateVacations(days);
-  saveWorkDays(days);
+  let days = getWorkDays();
+  const filteredDays = days.filter((d) => d.id !== id);
+  const updatedDays = recalculateVacations(filteredDays);
+  
+  localStorage.setItem(STORAGE_KEYS.DAYS, JSON.stringify(updatedDays));
+  const settings = getSettings();
+  if (settings.driverId) {
+      ApiService.deleteSingleDay(settings.driverId, id);
+      if (JSON.stringify(filteredDays) !== JSON.stringify(updatedDays)) {
+          ApiService.syncAllDays(settings.driverId, updatedDays);
+      }
+  }
 };
 
 export const updateRecentHistoryRates = (): number => {
@@ -146,6 +158,7 @@ export const updateRecentHistoryRates = (): number => {
     cutoffDate.setHours(0, 0, 0, 0);
 
     let modifiedDaysCount = 0;
+    const modifiedDays: WorkDay[] = [];
 
     const updatedDays = days.map(day => {
         const dayDate = new Date(day.date);
@@ -166,13 +179,15 @@ export const updateRecentHistoryRates = (): number => {
 
         if (dayModified) {
             modifiedDaysCount++;
-            return calculateDayTotals({ ...day, trips: newTrips });
+            const updated = calculateDayTotals({ ...day, trips: newTrips });
+            modifiedDays.push(updated);
+            return updated;
         }
         return day;
     });
 
     if (modifiedDaysCount > 0) {
-        saveWorkDays(updatedDays);
+        saveWorkDays(updatedDays, true);
     }
     return modifiedDaysCount;
 };
@@ -202,6 +217,8 @@ export const calculateDayTotals = (day: WorkDay): WorkDay => {
     totalWorkshop: 0,
     waitingHours: 0,
     totalWaiting: 0,
+    extraHourlyHours: 0,
+    totalExtraHourly: 0,
     trips: []
   };
 
@@ -226,6 +243,8 @@ export const calculateDayTotals = (day: WorkDay): WorkDay => {
   const totalWorkshop = workshopHours * settings.workshopRate;
   const waitingHours = day.waitingHours || 0;
   const totalWaiting = waitingHours * settings.waitingRate;
+  const extraHourlyHours = day.extraHourlyHours || 0;
+  const totalExtraHourly = extraHourlyHours * settings.extraHourlyRate;
 
   const recalculatedTrips = day.trips.map(trip => {
     const { amount, bonus } = calculateTrip(trip.weight, trip.rate);
@@ -243,6 +262,7 @@ export const calculateDayTotals = (day: WorkDay): WorkDay => {
     totalHourlyBonus,
     totalWorkshop,
     totalWaiting,
+    totalExtraHourly,
     totalWeight
   };
 };
@@ -267,9 +287,9 @@ export const importData = async (file: File): Promise<boolean> => {
   try {
     const text = await file.text();
     const data = JSON.parse(text);
-    if (data.settings) saveSettings(data.settings);
+    if (data.settings) saveSettings(data.settings, true);
     if (data.locations && Array.isArray(data.locations)) saveLocations(data.locations, true);
-    if (data.days && Array.isArray(data.days)) saveWorkDays(data.days);
+    if (data.days && Array.isArray(data.days)) saveWorkDays(data.days, true);
     return true;
   } catch (e) {
     console.error("Import failed", e);

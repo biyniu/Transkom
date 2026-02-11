@@ -1,6 +1,5 @@
 
-
-// Fix: Import React to resolve 'Cannot find namespace React' error
+// Fix: Added React import to resolve missing 'React' namespace
 import React, { useState } from 'react';
 import { Save, Settings as SettingsIcon, Lock, Cloud, LogOut, RefreshCw, Info } from 'lucide-react';
 import * as StorageService from '../services/storage';
@@ -123,8 +122,12 @@ const Settings: React.FC<SettingsProps> = ({ onOpenAdmin, onLogout }) => {
                     <input type="number" value={settings.sickLeaveRate} onChange={(e) => handleChange('sickLeaveRate', e.target.value)} className="w-full p-3 border border-slate-200 rounded-lg bg-slate-50" />
                </div>
                <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Godzinowa (zł/h)</label>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Godzinowa (Zegar 4,5 zł/h)</label>
                     <input type="number" step="0.5" value={settings.hourlyRate} onChange={(e) => handleChange('hourlyRate', e.target.value)} className="w-full p-3 border border-slate-200 rounded-lg bg-slate-50" />
+               </div>
+               <div className="col-span-2">
+                    <label className="block text-xs font-medium text-slate-500 mb-1 font-bold text-blue-600">Stawka Pracy na Godziny (zł/h)</label>
+                    <input type="number" step="0.5" value={settings.extraHourlyRate} onChange={(e) => handleChange('extraHourlyRate', e.target.value)} className="w-full p-3 border border-blue-200 rounded-lg bg-blue-50 font-bold" />
                </div>
                <div>
                     <label className="block text-xs font-medium text-slate-500 mb-1">Warsztat (zł/h)</label>
