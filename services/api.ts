@@ -8,6 +8,7 @@ import {
     deleteDoc,
     collection,
     getDocs,
+    writeBatch, // Importujemy obsługę paczek
     enableIndexedDbPersistence,
     FirestoreError
 } from "firebase/firestore";
@@ -151,10 +152,34 @@ export const fetchDriverFullProfile = async (driverId: string): Promise<{days: W
     }
 };
 
+// NOWA WERSJA: Zapis grupowy (Batch)
+// Zamiast wysyłać 100 zapytań, wysyłamy 1 paczkę.
 export const syncAllDays = async (driverId: string, days: WorkDay[]) => {
-    if (!driverId) return;
-    for (const day of days) {
-        await syncSingleDay(driverId, day);
+    if (!driverId || !isFirebaseConfigured()) return;
+    if (days.length === 0) return;
+
+    try {
+        // Firebase ma limit 500 operacji na jeden batch.
+        // Dzielimy tablicę na kawałki po 450 (dla bezpieczeństwa).
+        const chunkSize = 450; 
+        
+        for (let i = 0; i < days.length; i += chunkSize) {
+            const chunk = days.slice(i, i + chunkSize);
+            const batch = writeBatch(db);
+
+            chunk.forEach(day => {
+                const dayRef = doc(db, "driverData", driverId, "days", day.id);
+                batch.set(dayRef, {
+                    ...day,
+                    updatedAt: new Date().toISOString()
+                });
+            });
+
+            await batch.commit();
+            console.log(`Zsynchonizowano paczkę ${chunk.length} dni.`);
+        }
+    } catch (e) {
+        console.error(handleFirebaseError(e, "syncAllDays (Batch)"));
     }
 };
 
