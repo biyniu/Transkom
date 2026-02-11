@@ -1,7 +1,7 @@
 
 // Fix: Added React import to resolve missing 'React' namespace
 import React, { useState } from 'react';
-import { Save, Settings as SettingsIcon, Lock, Cloud, LogOut, RefreshCw, Info, Database, Wrench } from 'lucide-react';
+import { Save, Settings as SettingsIcon, Lock, Cloud, LogOut, RefreshCw, Info, Wrench } from 'lucide-react';
 import * as StorageService from '../services/storage';
 import * as ApiService from '../services/api';
 import { AppSettings } from '../types';
@@ -14,7 +14,6 @@ interface SettingsProps {
 const Settings: React.FC<SettingsProps> = ({ onOpenAdmin, onLogout }) => {
   const [settings, setSettings] = useState<AppSettings>(StorageService.getSettings());
   const [message, setMessage] = useState('');
-  const [isFixing, setIsFixing] = useState(false);
 
   const handleSave = () => {
     StorageService.saveSettings(settings);
@@ -35,43 +34,6 @@ const Settings: React.FC<SettingsProps> = ({ onOpenAdmin, onLogout }) => {
         const count = StorageService.updateRecentHistoryRates();
         setMessage(count > 0 ? `Zaktualizowano ${count} dni!` : 'Kursy są już aktualne.');
         setTimeout(() => setMessage(''), 3000);
-    }
-  };
-
-  const handleFixDbIds = async () => {
-    if (!confirm("Ta operacja uporządkuje bazę danych w chmurze.\n\nZamieni stare, losowe identyfikatory (np. '01bafd...') na daty (np. '2024-05-01').\n\nDzięki temu w Firebase dokumenty będą ułożone chronologicznie.\n\nCzy kontynuować?")) return;
-
-    setIsFixing(true);
-    setMessage('Trwa porządkowanie bazy...');
-    
-    // Work on a copy of the array because we will modify storage
-    const days = [...StorageService.getWorkDays()];
-    let fixedCount = 0;
-
-    try {
-        for (const day of days) {
-            // Check if ID is NOT a date (simple check: length > 10 chars is usually a UUID)
-            // Or if ID is strictly not equal to the date property
-            if (day.id !== day.date) {
-                // 1. Create clean copy with new ID
-                const newDay = { ...day, id: day.date };
-                
-                // 2. Delete old entry (Locally + Cloud)
-                StorageService.deleteDay(day.id);
-                
-                // 3. Save new entry (Locally + Cloud)
-                StorageService.saveDay(newDay);
-                
-                fixedCount++;
-            }
-        }
-        setMessage(`Sukces! Uporządkowano ${fixedCount} wpisów.`);
-    } catch (e) {
-        console.error(e);
-        setMessage('Wystąpił błąd podczas migracji.');
-    } finally {
-        setIsFixing(false);
-        setTimeout(() => setMessage(''), 4000);
     }
   };
 
@@ -128,18 +90,6 @@ const Settings: React.FC<SettingsProps> = ({ onOpenAdmin, onLogout }) => {
                    <div className="text-[10px] opacity-70">Aktualizuje ceny w starych kursach</div>
                </div>
                <RefreshCw size={20} className="group-active:rotate-180 transition-transform duration-500" />
-           </button>
-
-           <button 
-                onClick={handleFixDbIds} 
-                disabled={isFixing}
-                className="w-full flex items-center justify-between p-3 bg-orange-50 rounded-xl border border-orange-100 text-orange-700 group"
-           >
-               <div className="text-left">
-                   <div className="font-bold text-sm">Napraw Strukturę Bazy</div>
-                   <div className="text-[10px] opacity-70">Zmienia losowe ID na daty (Sortowanie)</div>
-               </div>
-               <Database size={20} className={isFixing ? "animate-pulse" : ""} />
            </button>
         </div>
 

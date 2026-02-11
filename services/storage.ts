@@ -154,7 +154,9 @@ export const updateRecentHistoryRates = (): number => {
     const days = getWorkDays();
     const locations = getLocations();
     const now = new Date();
-    // Optimization: Only look back ~2 months to keep it fast
+    
+    // ZMIANA: Zakres to 1. dzień POPRZEDNIEGO miesiąca.
+    // Np. Jest maj -> bierzemy wszystko od 1 kwietnia.
     const cutoffDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     cutoffDate.setHours(0, 0, 0, 0);
 
@@ -165,18 +167,43 @@ export const updateRecentHistoryRates = (): number => {
         const dayDate = new Date(day.date);
         dayDate.setHours(0,0,0,0);
         
-        // Skip check for very old days
+        // Pomijamy dni starsze niż zakres (obecny + poprzedni miesiąc)
         if (dayDate < cutoffDate) return day;
         if (day.type !== DayType.WORK) return day;
 
         let dayModified = false;
+        
         const newTrips = day.trips.map(trip => {
+            // KLUCZOWA ZMIANA: Szukamy TYLKO po ID. 
+            // ID jest święte. Jeśli ID się zgadza, wymuszamy dane z bazy.
+            if (!trip.locationId) return trip;
+
             const loc = locations.find(l => l.id === trip.locationId);
-            // Check if rate or name changed in the database vs the trip
-            if (loc && (loc.rate !== trip.rate || loc.name !== trip.locationName)) {
-                dayModified = true;
+
+            if (loc) {
+                // Sprawdzamy czy cokolwiek jest inne (nazwa, stawka)
+                // Używamy Math.abs dla stawek, żeby uniknąć problemów z float
+                const isRateDiff = Math.abs(loc.rate - trip.rate) > 0.001;
+                const isNameDiff = loc.name !== trip.locationName;
+                
+                // Nawet jeśli dane wyglądają na te same, przeliczamy amount/bonus
+                // żeby upewnić się, że matematyka jest spójna.
                 const { amount, bonus } = calculateTrip(trip.weight, loc.rate);
-                return { ...trip, rate: loc.rate, locationName: loc.name, amount, bonus };
+                
+                // Sprawdzamy czy przeliczone wartości różnią się od zapisanych
+                const isAmountDiff = Math.abs(amount - trip.amount) > 0.01;
+                const isBonusDiff = Math.abs(bonus - trip.bonus) > 0.01;
+
+                if (isRateDiff || isNameDiff || isAmountDiff || isBonusDiff) {
+                    dayModified = true;
+                    return { 
+                        ...trip, 
+                        rate: loc.rate, 
+                        locationName: loc.name, 
+                        amount, 
+                        bonus 
+                    };
+                }
             }
             return trip;
         });
@@ -191,10 +218,10 @@ export const updateRecentHistoryRates = (): number => {
     });
 
     if (modifiedDaysCount > 0) {
-        // 1. Save all days locally but DO NOT sync all (pass false)
+        // 1. Zapisujemy lokalnie wszystko (bez syncu tutaj, żeby nie zapchać)
         saveWorkDays(updatedDays, false);
 
-        // 2. Sync ONLY the modified days to cloud to prevent timeouts/freezes
+        // 2. Synchronizujemy TYLKO zmienione dni paczkami (Batch)
         const settings = getSettings();
         if (settings.driverId) {
             ApiService.syncAllDays(settings.driverId, modifiedDays);
