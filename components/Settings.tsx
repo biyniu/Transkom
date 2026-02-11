@@ -1,5 +1,7 @@
 
-import { useState } from 'react';
+
+// Fix: Import React to resolve 'Cannot find namespace React' error
+import React, { useState } from 'react';
 import { Save, Settings as SettingsIcon, Lock, Cloud, LogOut, RefreshCw, Info } from 'lucide-react';
 import * as StorageService from '../services/storage';
 import * as ApiService from '../services/api';

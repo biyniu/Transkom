@@ -1,5 +1,7 @@
 
-import { useState, useEffect } from 'react';
+
+// Fix: Import React to resolve 'Cannot find namespace React' error
+import React, { useState, useEffect } from 'react';
 import { Truck, LogIn, Lock, AlertCircle, RefreshCw, Database } from 'lucide-react';
 import * as StorageService from '../services/storage';
 import * as ApiService from '../services/api';

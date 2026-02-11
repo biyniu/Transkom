@@ -10,6 +10,13 @@ const STORAGE_KEYS = {
   SETTINGS: 'kierowcapro_settings',
 };
 
+// Flaga blokująca wysyłkę do Firebase podczas pobierania danych
+let isInitialSyncing = false;
+
+export const setInitialSyncing = (val: boolean) => {
+    isInitialSyncing = val;
+};
+
 const INITIAL_LOCATIONS: LocationRate[] = [
   { id: '1', name: 'Siemianowice DOMBUD', rate: 2.85 },
   { id: 'extra3', name: 'MATERIAŁ FREZY', rate: 9 },
@@ -42,7 +49,7 @@ export const getLocations = (): LocationRate[] => {
 
 export const saveLocations = (locations: LocationRate[], sync = true) => {
   localStorage.setItem(STORAGE_KEYS.LOCATIONS, JSON.stringify(locations));
-  if (sync) {
+  if (sync && !isInitialSyncing) {
       ApiService.syncLocations(locations);
   }
 };
@@ -54,7 +61,7 @@ export const getDrivers = (): Driver[] => {
 
 export const saveDrivers = (drivers: Driver[], sync = true) => {
   localStorage.setItem(STORAGE_KEYS.DRIVERS, JSON.stringify(drivers));
-  if (sync) {
+  if (sync && !isInitialSyncing) {
     ApiService.syncDrivers(drivers);
   }
 };
@@ -64,10 +71,14 @@ export const getWorkDays = (): WorkDay[] => {
   return data ? JSON.parse(data) : [];
 };
 
-export const saveWorkDays = (days: WorkDay[]) => {
+export const saveWorkDays = (days: WorkDay[], sync = true) => {
   localStorage.setItem(STORAGE_KEYS.DAYS, JSON.stringify(days));
   const settings = getSettings();
-  if (settings.driverId) {
+  
+  // Synchronizuj z Firebase tylko jeśli NIE trwa pobieranie początkowe 
+  // i jeśli jawnie tego chcemy (sync=true)
+  if (sync && !isInitialSyncing && settings.driverId) {
+    console.log("Storage: Synchronizacja kursów z Firebase...");
     ApiService.syncDriverData(settings.driverId, days);
   }
 };

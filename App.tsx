@@ -1,6 +1,7 @@
 
-import { useState, useEffect } from 'react';
-import { Home, PlusCircle, Settings as SettingsIcon, MapPin, FileText } from 'lucide-react';
+// Fix: Import React to resolve 'Cannot find namespace React' error
+import React, { useState, useEffect } from 'react';
+import { Home, PlusCircle, Settings as SettingsIcon, MapPin, FileText, CloudRain, Loader2 } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import DayEditor from './components/DayEditor';
 import LocationsManager from './components/LocationsManager';
@@ -37,23 +38,36 @@ const App: React.FC = () => {
   }, []);
 
   const initializeData = async (driverId: string) => {
+    // 1. Zablokuj interfejs i zapisywanie do Firebase
     setIsLoading(true);
+    StorageService.setInitialSyncing(true);
+    
+    console.log("App: Rozpoczęto inicjalizację danych dla:", driverId);
+    
     try {
-        // Pobierz lokalizacje z chmury
+        // 2. Pobierz najnowsze lokalizacje
         const locations = await ApiService.fetchLocations();
         if (locations && locations.length > 0) {
             StorageService.saveLocations(locations, false);
         }
 
-        // Pobierz dni pracy kierowcy
+        // 3. Pobierz historię kursów kierowcy
         const days = await ApiService.fetchDriverData(driverId);
-        if (days && days.length > 0) {
-            StorageService.saveWorkDays(days);
-            setRefreshTrigger(prev => prev + 1);
-        }
+        
+        // Zawsze zapisujemy to co przyszło z Firebase do localStorage
+        // Nawet jeśli jest puste (sync=false zapobiega nadpisaniu chmury pustką)
+        StorageService.saveWorkDays(days || [], false);
+        
+        console.log(`App: Pobrano ${days?.length || 0} dni z Firebase.`);
+        
+        // 4. Odśwież widok
+        setRefreshTrigger(prev => prev + 1);
+        
     } catch (e) {
-        console.warn("Błąd inicjalizacji danych z chmury. Używam danych lokalnych.");
+        console.error("App: Błąd krytyczny podczas inicjalizacji danych:", e);
     } finally {
+        // 5. Odblokuj wszystko
+        StorageService.setInitialSyncing(false);
         setIsLoading(false);
     }
   };
@@ -71,6 +85,8 @@ const App: React.FC = () => {
         const settings = StorageService.getSettings();
         settings.driverId = undefined;
         StorageService.saveSettings(settings);
+        // Czyścimy lokalne dni przy wylogowaniu
+        StorageService.saveWorkDays([], false);
         setIsLoggedIn(false);
     }
   };
@@ -100,11 +116,27 @@ const App: React.FC = () => {
     <div className="h-[100dvh] w-full flex flex-col bg-slate-50 text-slate-900 font-sans overflow-hidden relative">
       <InstallPrompt />
 
+      {/* Overlay ładowania danych - blokuje interakcję dopóki historia nie spłynie */}
       {isLoading && (
-        <div className="absolute inset-0 z-[60] bg-white/80 backdrop-blur-sm flex items-center justify-center">
-            <div className="flex flex-col items-center gap-4">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-                <p className="text-xs font-bold text-slate-500 animate-pulse uppercase tracking-widest">Synchronizacja z Firebase...</p>
+        <div className="absolute inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex flex-col items-center justify-center text-white p-6 text-center">
+            <div className="bg-white text-slate-900 p-6 rounded-2xl shadow-2xl flex flex-col items-center gap-4 animate-slide-up">
+                <Loader2 className="text-primary animate-spin" size={40} />
+                <div>
+                    <h3 className="font-bold text-lg">Pobieranie historii...</h3>
+                    <p className="text-slate-500 text-sm">Synchronizuję dane z Twoim kontem</p>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* Pasek synchronizacji u góry */}
+      {isLoading && (
+        <div className="absolute top-0 left-0 right-0 z-[60] bg-blue-600 text-white text-[10px] py-1 px-4 flex items-center justify-between animate-slide-down">
+            <span className="font-bold uppercase tracking-widest flex items-center gap-2">
+                <CloudRain size={12} className="animate-pulse"/> Ładowanie bazy danych...
+            </span>
+            <div className="h-1 w-24 bg-blue-800 rounded-full overflow-hidden">
+                <div className="h-full bg-white animate-progress"></div>
             </div>
         </div>
       )}
@@ -172,6 +204,30 @@ const App: React.FC = () => {
           </button>
         </nav>
       )}
+
+      <style>{`
+        @keyframes progress {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        .animate-progress {
+            animation: progress 1.5s infinite linear;
+        }
+        @keyframes slide-down {
+            from { transform: translateY(-100%); }
+            to { transform: translateY(0); }
+        }
+        .animate-slide-down {
+            animation: slide-down 0.3s ease-out;
+        }
+        @keyframes slide-up {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slide-up {
+            animation: slide-up 0.4s ease-out;
+        }
+      `}</style>
     </div>
   );
 };
