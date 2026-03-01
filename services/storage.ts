@@ -17,10 +17,10 @@ const INITIAL_LOCATIONS: LocationRate[] = [
 
 const DEFAULT_SETTINGS: AppSettings = {
   vacationRateOld: 210,
-  vacationRateNew: 230,
+  vacationRateNew: 210,
   sickLeaveRate: 150,
   hourlyRate: 4.5,
-  extraHourlyRate: 15,
+  extraHourlyRate: 30,
   workshopRate: 10,
   waitingRate: 8,
   totalVacationDays: 30,
@@ -151,72 +151,97 @@ export const deleteDay = (id: string) => {
 };
 
 export const updateRecentHistoryRates = (): number => {
-    const days = getWorkDays();
+    const originalDays = getWorkDays();
     const locations = getLocations();
+    const settings = getSettings();
     const now = new Date();
     
     // Zakres: 1. dzień POPRZEDNIEGO miesiąca.
     const cutoffDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     cutoffDate.setHours(0, 0, 0, 0);
 
+    // 1. Przeliczamy urlopy dla WSZYSTKICH dni (aby zachować ciągłość limitów),
+    // ale zapiszemy zmiany tylko dla dni z zakresu.
+    const vacationCorrectedDays = recalculateVacations(originalDays);
+
     let modifiedDaysCount = 0;
     const modifiedDays: WorkDay[] = [];
 
-    const updatedDays = days.map(day => {
-        const dayDate = new Date(day.date);
+    const updatedDays = vacationCorrectedDays.map(vDay => {
+        // Znajdź oryginał, aby porównać zmiany
+        const originalDay = originalDays.find(d => d.id === vDay.id) || vDay;
+        
+        const dayDate = new Date(vDay.date);
         dayDate.setHours(0,0,0,0);
         
         // Pomijamy dni spoza zakresu (obecny + poprzedni miesiąc)
-        if (dayDate < cutoffDate) return day;
-        if (day.type !== DayType.WORK) return day;
+        // Dla dni starszych zwracamy ORYGINAŁ (nie chcemy zmieniać historycznych rozliczeń urlopów)
+        if (dayDate < cutoffDate) return originalDay;
 
-        let dayModified = false;
-        
-        const newTrips = day.trips.map(trip => {
-            // 1. Próba znalezienia po ID
-            let loc = locations.find(l => l.id === trip.locationId);
+        // Pracujemy na kopii dnia, który ma już potencjalnie poprawioną stawkę urlopową (z vacationCorrectedDays)
+        let processedDay = { ...vDay };
 
-            // 2. FALLBACK: Jeśli ID nie pasuje (lub go brak), szukamy po NAZWIE
-            if (!loc && trip.locationName) {
-                const searchName = trip.locationName.trim().toLowerCase();
-                loc = locations.find(l => l.name.trim().toLowerCase() === searchName);
-            }
-
-            if (loc) {
-                // Sprawdzamy różnice (Stawka, Nazwa, ID, Kwoty)
-                const isRateDiff = Math.abs(loc.rate - (trip.rate || 0)) > 0.001;
-                const isNameDiff = loc.name !== trip.locationName;
-                const isIdDiff = loc.id !== trip.locationId; // Naprawa ID jeśli znaleziono po nazwie
-                
-                const { amount, bonus } = calculateTrip(trip.weight, loc.rate);
-                
-                const isAmountDiff = Math.abs(amount - trip.amount) > 0.01;
-                const isBonusDiff = Math.abs(bonus - trip.bonus) > 0.01;
-
-                if (isRateDiff || isNameDiff || isAmountDiff || isBonusDiff || isIdDiff) {
-                    dayModified = true;
-                    // Zwracamy zaktualizowany trip z POPRAWNYM ID i STAWKĄ z bazy
-                    return { 
-                        ...trip, 
-                        locationId: loc.id,     // Nadpisz ID (naprawa relacji)
-                        locationName: loc.name, // Nadpisz nazwę (formatowanie)
-                        rate: loc.rate,         // Nadpisz stawkę
-                        amount,                 // Przeliczona kwota
-                        bonus                   // Przeliczona premia
-                    };
-                }
-            }
-            return trip;
-        });
-
-        if (dayModified) {
-            modifiedDaysCount++;
-            // Przelicz sumy dzienne z nowymi tripami
-            const updated = calculateDayTotals({ ...day, trips: newTrips });
-            modifiedDays.push(updated);
-            return updated;
+        // A. Aktualizacja stawek "dniowych" (L4, Godziny, Warsztat, Postój)
+        // calculateDayTotals pobiera aktualne settings i przelicza sumy
+        if (processedDay.type === DayType.WORK || processedDay.type === DayType.SICK_LEAVE) {
+             processedDay = calculateDayTotals(processedDay);
         }
-        return day;
+
+        // B. Aktualizacja stawek za Miejscowości (tylko dla WORK)
+        if (processedDay.type === DayType.WORK) {
+            let tripsModified = false;
+            
+            const newTrips = processedDay.trips.map(trip => {
+                // 1. Próba znalezienia po ID
+                let loc = locations.find(l => l.id === trip.locationId);
+
+                // 2. FALLBACK: Jeśli ID nie pasuje (lub go brak), szukamy po NAZWIE
+                if (!loc && trip.locationName) {
+                    const searchName = trip.locationName.trim().toLowerCase();
+                    loc = locations.find(l => l.name.trim().toLowerCase() === searchName);
+                }
+
+                if (loc) {
+                    // Sprawdzamy różnice (Stawka, Nazwa, ID, Kwoty)
+                    const isRateDiff = Math.abs(loc.rate - (trip.rate || 0)) > 0.001;
+                    const isNameDiff = loc.name !== trip.locationName;
+                    const isIdDiff = loc.id !== trip.locationId; 
+                    
+                    const { amount, bonus } = calculateTrip(trip.weight, loc.rate);
+                    
+                    const isAmountDiff = Math.abs(amount - trip.amount) > 0.01;
+                    const isBonusDiff = Math.abs(bonus - trip.bonus) > 0.01;
+
+                    if (isRateDiff || isNameDiff || isAmountDiff || isBonusDiff || isIdDiff) {
+                        tripsModified = true;
+                        return { 
+                            ...trip, 
+                            locationId: loc.id,
+                            locationName: loc.name,
+                            rate: loc.rate,
+                            amount,
+                            bonus
+                        };
+                    }
+                }
+                return trip;
+            });
+
+            if (tripsModified) {
+                // Ponowne przeliczenie sumy dnia po aktualizacji kursów
+                processedDay = calculateDayTotals({ ...processedDay, trips: newTrips });
+            }
+        }
+
+        // Sprawdzamy czy cokolwiek się zmieniło względem oryginału
+        // Używamy JSON.stringify do głębokiego porównania
+        if (JSON.stringify(processedDay) !== JSON.stringify(originalDay)) {
+            modifiedDaysCount++;
+            modifiedDays.push(processedDay);
+            return processedDay;
+        }
+
+        return originalDay;
     });
 
     if (modifiedDaysCount > 0) {
@@ -224,7 +249,6 @@ export const updateRecentHistoryRates = (): number => {
         saveWorkDays(updatedDays, false);
 
         // 2. Synchronizujemy zmienione dni
-        const settings = getSettings();
         if (settings.driverId) {
             ApiService.syncAllDays(settings.driverId, modifiedDays);
         }

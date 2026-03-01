@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, Save, ArrowLeft, Clock, Search, X, Wrench, Hourglass, Thermometer, Moon, Briefcase, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Save, ArrowLeft, Clock, Search, X, Wrench, Hourglass, Thermometer, Moon, Briefcase, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { WorkDay, DayType, LocationRate, Trip, AppSettings } from '../types';
 import * as StorageService from '../services/storage';
 
@@ -21,6 +21,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
   
   // State for Daily Rest Calculation
   const [restInfo, setRestInfo] = useState<{ label: string; colorClass: string } | null>(null);
+  const [isExtrasExpanded, setIsExtrasExpanded] = useState(false);
 
   const [day, setDay] = useState<WorkDay>({
     id: new Date().toISOString().slice(0, 10), // Default ID is today's date
@@ -54,12 +55,18 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
         setShowWorkshop((existingDay.workshopHours || 0) > 0);
         setShowWaiting((existingDay.waitingHours || 0) > 0);
         setShowExtraHourly((existingDay.extraHourlyHours || 0) > 0);
+        
+        // Auto-expand if any extra is active
+        if ((existingDay.workshopHours || 0) > 0 || (existingDay.waitingHours || 0) > 0 || (existingDay.extraHourlyHours || 0) > 0) {
+            setIsExtrasExpanded(true);
+        }
       }
     } else {
         // Reset toggles for new day
         setShowWorkshop(false);
         setShowWaiting(false);
         setShowExtraHourly(false);
+        setIsExtrasExpanded(false);
     }
   }, [dayId]);
 
@@ -347,125 +354,140 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
         </section>
 
         {day.type === DayType.WORK && (
-          <section className="bg-white p-4 rounded-xl shadow-sm space-y-4">
-             {/* Workshop Toggle */}
-             <div>
-                <label className="flex items-center gap-3 cursor-pointer">
-                    <input 
-                    type="checkbox" 
-                    checked={showWorkshop}
-                    onChange={toggleWorkshop}
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
-                    />
-                    <div className="flex items-center gap-2 text-slate-700 font-medium">
+          <section className="bg-white rounded-xl shadow-sm overflow-hidden">
+             <button
+                onClick={() => setIsExtrasExpanded(!isExtrasExpanded)}
+                className="w-full flex items-center justify-between p-4 bg-white hover:bg-slate-50 transition-colors"
+             >
+                <div className="flex items-center gap-2 font-medium text-slate-700">
                     <Wrench size={18} className="text-slate-500" />
-                    Warsztat / Naprawa ({settings.workshopRate} zł/h)
-                    </div>
-                </label>
-                
-                {showWorkshop && (
-                    <div className="mt-2 pl-8 animate-fade-in">
-                        <div className="flex items-center gap-2">
-                            <input 
-                            type="number"
-                            step="0.5"
-                            value={day.workshopHours === 0 ? '' : day.workshopHours}
-                            placeholder="0"
-                            onChange={e => {
-                                const val = parseFloat(e.target.value);
-                                setDay({...day, workshopHours: isNaN(val) ? 0 : val});
-                            }}
-                            className="w-24 p-2 border border-slate-300 rounded-lg text-center font-bold"
-                            />
-                            <span className="text-slate-500 font-medium">h = </span>
-                            <span className="text-green-600 font-bold">{((day.workshopHours || 0) * settings.workshopRate).toFixed(2)} zł</span>
-                        </div>
-                    </div>
-                )}
-             </div>
-             
-             <hr className="border-slate-100" />
+                    <span>Warsztat, Oczekiwanie</span>
+                </div>
+                {isExtrasExpanded ? <ChevronUp size={20} className="text-slate-400" /> : <ChevronDown size={20} className="text-slate-400" />}
+             </button>
 
-             {/* Waiting Toggle */}
-             <div>
-                <label className="flex items-center gap-3 cursor-pointer">
-                    <input 
-                    type="checkbox" 
-                    checked={showWaiting}
-                    onChange={toggleWaiting}
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
-                    />
-                    <div className="flex items-center gap-2 text-slate-700 font-medium">
-                    <Hourglass size={18} className="text-slate-500" />
-                    Oczekiwanie na załad./rozład. ({settings.waitingRate} zł/h)
-                    </div>
-                </label>
-                
-                {showWaiting && (
-                    <div className="mt-2 pl-8 space-y-2 animate-fade-in">
-                        <div className="flex items-center gap-2">
+             {isExtrasExpanded && (
+                 <div className="p-4 pt-0 space-y-4 border-t border-slate-100 animate-fade-in">
+                     {/* Workshop Toggle */}
+                     <div className="mt-4">
+                        <label className="flex items-center gap-3 cursor-pointer">
                             <input 
-                            type="number"
-                            step="0.5"
-                            value={day.waitingHours === 0 ? '' : day.waitingHours}
-                            placeholder="0"
-                            onChange={e => {
-                                const val = parseFloat(e.target.value);
-                                setDay({...day, waitingHours: isNaN(val) ? 0 : val});
-                            }}
-                            className="w-24 p-2 border border-slate-300 rounded-lg text-center font-bold"
+                            type="checkbox" 
+                            checked={showWorkshop}
+                            onChange={toggleWorkshop}
+                            className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
                             />
-                            <span className="text-slate-500 font-medium">h = </span>
-                            <span className="text-green-600 font-bold">{((day.waitingHours || 0) * settings.waitingRate).toFixed(2)} zł</span>
-                        </div>
-                        <input 
-                           type="text"
-                           placeholder="Gdzie stałem?"
-                           value={day.waitingNote || ''}
-                           onChange={e => setDay({...day, waitingNote: e.target.value})}
-                           className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-gray-50"
-                        />
-                    </div>
-                )}
-             </div>
+                            <div className="flex items-center gap-2 text-slate-700 font-medium">
+                            <Wrench size={18} className="text-slate-500" />
+                            Warsztat / Naprawa ({settings.workshopRate} zł/h)
+                            </div>
+                        </label>
+                        
+                        {showWorkshop && (
+                            <div className="mt-2 pl-8 animate-fade-in">
+                                <div className="flex items-center gap-2">
+                                    <input 
+                                    type="number"
+                                    step="0.5"
+                                    value={day.workshopHours === 0 ? '' : day.workshopHours}
+                                    placeholder="0"
+                                    onChange={e => {
+                                        const val = parseFloat(e.target.value);
+                                        setDay({...day, workshopHours: isNaN(val) ? 0 : val});
+                                    }}
+                                    className="w-24 p-2 border border-slate-300 rounded-lg text-center font-bold"
+                                    />
+                                    <span className="text-slate-500 font-medium">h = </span>
+                                    <span className="text-green-600 font-bold">{((day.workshopHours || 0) * settings.workshopRate).toFixed(2)} zł</span>
+                                </div>
+                            </div>
+                        )}
+                     </div>
+                     
+                     <hr className="border-slate-100" />
 
-             <hr className="border-slate-100" />
-
-             {/* Extra Hourly Work Toggle */}
-             <div>
-                <label className="flex items-center gap-3 cursor-pointer">
-                    <input 
-                    type="checkbox" 
-                    checked={showExtraHourly}
-                    onChange={toggleExtraHourly}
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
-                    />
-                    <div className="flex items-center gap-2 text-slate-700 font-medium">
-                    <Briefcase size={18} className="text-slate-500" />
-                    Praca na Godziny ({settings.extraHourlyRate} zł/h)
-                    </div>
-                </label>
-                
-                {showExtraHourly && (
-                    <div className="mt-2 pl-8 animate-fade-in">
-                        <div className="flex items-center gap-2">
+                     {/* Waiting Toggle */}
+                     <div>
+                        <label className="flex items-center gap-3 cursor-pointer">
                             <input 
-                            type="number"
-                            step="0.5"
-                            value={day.extraHourlyHours === 0 ? '' : day.extraHourlyHours}
-                            placeholder="0"
-                            onChange={e => {
-                                const val = parseFloat(e.target.value);
-                                setDay({...day, extraHourlyHours: isNaN(val) ? 0 : val});
-                            }}
-                            className="w-24 p-2 border border-slate-300 rounded-lg text-center font-bold"
+                            type="checkbox" 
+                            checked={showWaiting}
+                            onChange={toggleWaiting}
+                            className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
                             />
-                            <span className="text-slate-500 font-medium">h = </span>
-                            <span className="text-green-600 font-bold">{((day.extraHourlyHours || 0) * settings.extraHourlyRate).toFixed(2)} zł</span>
-                        </div>
-                    </div>
-                )}
-             </div>
+                            <div className="flex items-center gap-2 text-slate-700 font-medium">
+                            <Hourglass size={18} className="text-slate-500" />
+                            Oczekiwanie na załad./rozład. ({settings.waitingRate} zł/h)
+                            </div>
+                        </label>
+                        
+                        {showWaiting && (
+                            <div className="mt-2 pl-8 space-y-2 animate-fade-in">
+                                <div className="flex items-center gap-2">
+                                    <input 
+                                    type="number"
+                                    step="0.5"
+                                    value={day.waitingHours === 0 ? '' : day.waitingHours}
+                                    placeholder="0"
+                                    onChange={e => {
+                                        const val = parseFloat(e.target.value);
+                                        setDay({...day, waitingHours: isNaN(val) ? 0 : val});
+                                    }}
+                                    className="w-24 p-2 border border-slate-300 rounded-lg text-center font-bold"
+                                    />
+                                    <span className="text-slate-500 font-medium">h = </span>
+                                    <span className="text-green-600 font-bold">{((day.waitingHours || 0) * settings.waitingRate).toFixed(2)} zł</span>
+                                </div>
+                                <input 
+                                   type="text"
+                                   placeholder="Gdzie stałem?"
+                                   value={day.waitingNote || ''}
+                                   onChange={e => setDay({...day, waitingNote: e.target.value})}
+                                   className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-gray-50"
+                                />
+                            </div>
+                        )}
+                     </div>
+
+                     <hr className="border-slate-100" />
+
+                     {/* Extra Hourly Work Toggle */}
+                     <div>
+                        <label className="flex items-center gap-3 cursor-pointer">
+                            <input 
+                            type="checkbox" 
+                            checked={showExtraHourly}
+                            onChange={toggleExtraHourly}
+                            className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                            />
+                            <div className="flex items-center gap-2 text-slate-700 font-medium">
+                            <Briefcase size={18} className="text-slate-500" />
+                            Praca na Godziny ({settings.extraHourlyRate} zł/h)
+                            </div>
+                        </label>
+                        
+                        {showExtraHourly && (
+                            <div className="mt-2 pl-8 animate-fade-in">
+                                <div className="flex items-center gap-2">
+                                    <input 
+                                    type="number"
+                                    step="0.5"
+                                    value={day.extraHourlyHours === 0 ? '' : day.extraHourlyHours}
+                                    placeholder="0"
+                                    onChange={e => {
+                                        const val = parseFloat(e.target.value);
+                                        setDay({...day, extraHourlyHours: isNaN(val) ? 0 : val});
+                                    }}
+                                    className="w-24 p-2 border border-slate-300 rounded-lg text-center font-bold"
+                                    />
+                                    <span className="text-slate-500 font-medium">h = </span>
+                                    <span className="text-green-600 font-bold">{((day.extraHourlyHours || 0) * settings.extraHourlyRate).toFixed(2)} zł</span>
+                                </div>
+                            </div>
+                        )}
+                     </div>
+                 </div>
+             )}
           </section>
         )}
 

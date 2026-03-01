@@ -1,7 +1,8 @@
 
 // Fix: Added React import to resolve missing 'React' namespace
 import React, { useState, useEffect } from 'react';
-import { Home, PlusCircle, Settings as SettingsIcon, MapPin, FileText, AlertTriangle, CloudOff } from 'lucide-react';
+import { Home, PlusCircle, Settings as SettingsIcon, MapPin, FileText, AlertTriangle, CloudOff, Plus } from 'lucide-react';
+import { format } from 'date-fns';
 import Dashboard from './components/Dashboard';
 import DayEditor from './components/DayEditor';
 import LocationsManager from './components/LocationsManager';
@@ -118,6 +119,13 @@ const App: React.FC = () => {
     setRefreshTrigger(prev => prev + 1);
   };
 
+  const handleAddToday = () => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const days = StorageService.getWorkDays();
+    const todayEntry = days.find(d => d.date === todayStr);
+    handleOpenEditor(todayEntry?.id);
+  };
+
   if (!isLoggedIn) {
     return (
         <>
@@ -197,7 +205,7 @@ const App: React.FC = () => {
       </main>
 
       {currentView !== View.EDITOR && (
-        <nav className="h-20 bg-white border-t border-slate-200 flex justify-around items-center px-2 pb-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-40 flex-none">
+        <nav className="h-20 bg-white border-t border-slate-200 flex justify-around items-center px-2 pb-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-40 flex-none relative">
           <button 
             onClick={() => setCurrentView(View.DASHBOARD)}
             className={`flex flex-col items-center p-2 rounded-xl transition ${currentView === View.DASHBOARD ? 'text-primary bg-blue-50' : 'text-slate-400'}`}
@@ -212,6 +220,13 @@ const App: React.FC = () => {
           >
             <FileText size={24} />
             <span className="text-[10px] font-medium mt-1">Raport</span>
+          </button>
+
+          <button 
+             onClick={handleAddToday}
+             className="flex flex-col items-center justify-center w-14 h-14 bg-green-600 text-white rounded-full shadow-lg -mt-8 border-4 border-slate-50 z-50 active:scale-95 transition-transform"
+          >
+             <Plus size={32} strokeWidth={3} />
           </button>
 
           <button 

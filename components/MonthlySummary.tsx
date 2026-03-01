@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { Truck, Clock, Calculator, Wallet, Calendar, ChevronDown, Wrench, Hourglass, FileDown, Info, Percent, Briefcase } from 'lucide-react';
+import { Truck, Clock, Calculator, Wallet, Calendar, ChevronDown, Wrench, Hourglass, FileDown, Info, Percent, Briefcase, Palmtree } from 'lucide-react';
 import { WorkDay, DayType } from '../types';
 import * as StorageService from '../services/storage';
 import { jsPDF } from "jspdf";
@@ -57,7 +57,12 @@ const MonthlySummary: React.FC = () => {
     totalEarnings: 0,
     totalTons: 0,
     totalTrips: 0,
-    daysWorked: 0
+    daysWorked: 0,
+    vacationDays: 0,
+    sickDays: 0,
+    tripEarnings: 0,
+    vacationEarnings: 0,
+    sickLeaveEarnings: 0
   });
   const [locationStats, setLocationStats] = useState<LocationStat[]>([]);
   const [extraEvents, setExtraEvents] = useState<ExtraEvent[]>([]);
@@ -88,6 +93,11 @@ const MonthlySummary: React.FC = () => {
     let totalTons = 0;
     let totalTrips = 0;
     let daysWorked = 0;
+    let vacationDays = 0;
+    let sickDays = 0;
+    let tripEarnings = 0;
+    let vacationEarnings = 0;
+    let sickLeaveEarnings = 0;
 
     const extras: ExtraEvent[] = [];
     const grouped: Record<string, LocationStat> = {};
@@ -138,7 +148,14 @@ const MonthlySummary: React.FC = () => {
 
       totalTons += day.totalWeight;
       
-      if (day.type === DayType.WORK) {
+      if (day.type === DayType.VACATION) {
+        vacationDays++;
+        vacationEarnings += day.totalAmount;
+      } else if (day.type === DayType.SICK_LEAVE) {
+        sickDays++;
+        sickLeaveEarnings += day.totalAmount;
+      } else if (day.type === DayType.WORK) {
+        tripEarnings += day.totalAmount;
         totalTrips += day.trips.length;
         daysWorked++;
 
@@ -177,7 +194,12 @@ const MonthlySummary: React.FC = () => {
       totalEarnings: baseEarnings + fuelBonus + hourlyBonus + workshopMoney + waitingMoney + extraHourlyMoney,
       totalTons,
       totalTrips,
-      daysWorked
+      daysWorked,
+      vacationDays,
+      sickDays,
+      tripEarnings,
+      vacationEarnings,
+      sickLeaveEarnings
     });
 
     const groupedArray = Object.values(grouped).sort((a, b) => a.name.localeCompare(b.name));
@@ -200,7 +222,18 @@ const MonthlySummary: React.FC = () => {
     doc.text(removeDiacritics("Podsumowanie Finansowe"), 14, 50);
     
     const summaryData = [
-      ["Podstawa (Kursy/Urlop)", `${stats.baseEarnings.toFixed(2)} zl`],
+      ["Podstawa (Kursy)", `${stats.tripEarnings.toFixed(2)} zl`]
+    ];
+
+    if (stats.vacationDays > 0) {
+        summaryData.push([`Urlop (${stats.vacationDays} dni)`, `${stats.vacationEarnings.toFixed(2)} zl`]);
+    }
+
+    if (stats.sickDays > 0) {
+        summaryData.push([`L4 (${stats.sickDays} dni)`, `${stats.sickLeaveEarnings.toFixed(2)} zl`]);
+    }
+
+    summaryData.push(
       ["Premia Paliwowa (Prognozowane 20%)", `${stats.fuelBonus.toFixed(2)} zl`],
       ["Premia Godzinowa (Czas Pracy)", `${stats.hourlyBonus.toFixed(2)} zl`],
       [`Praca na Godziny (${stats.extraHourlyHours}h)`, `${stats.extraHourlyMoney.toFixed(2)} zl`],
@@ -208,7 +241,7 @@ const MonthlySummary: React.FC = () => {
       [`Postoj (${stats.waitingHours}h)`, `${stats.waitingMoney.toFixed(2)} zl`],
       ["-----------------", "----------"],
       ["RAZEM", `${stats.totalEarnings.toFixed(2)} zl`]
-    ];
+    );
 
     autoTable(doc, {
       startY: 55,
@@ -325,6 +358,14 @@ const MonthlySummary: React.FC = () => {
             </div>
         </div>
       </div>
+
+      {/* Vacation Info Bar */}
+      {stats.vacationDays > 0 && (
+        <div className="bg-blue-50 border-b border-blue-100 p-2 flex justify-center items-center gap-2 text-xs font-bold text-blue-700 animate-fade-in">
+            <Palmtree size={14} />
+            <span>Wykorzystany urlop: {stats.vacationDays} dni</span>
+        </div>
+      )}
 
       {/* Podsumowanie Stawkami */}
       <div className="bg-white border-b border-slate-200 shadow-sm p-3 z-10 flex-none space-y-3">
