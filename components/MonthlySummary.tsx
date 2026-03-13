@@ -62,7 +62,9 @@ const MonthlySummary: React.FC = () => {
     sickDays: 0,
     tripEarnings: 0,
     vacationEarnings: 0,
-    sickLeaveEarnings: 0
+    sickLeaveEarnings: 0,
+    workedHours: 0,
+    workedMinutes: 0
   });
   const [locationStats, setLocationStats] = useState<LocationStat[]>([]);
   const [extraEvents, setExtraEvents] = useState<ExtraEvent[]>([]);
@@ -98,6 +100,7 @@ const MonthlySummary: React.FC = () => {
     let tripEarnings = 0;
     let vacationEarnings = 0;
     let sickLeaveEarnings = 0;
+    let totalMinutes = 0;
 
     const extras: ExtraEvent[] = [];
     const grouped: Record<string, LocationStat> = {};
@@ -159,6 +162,16 @@ const MonthlySummary: React.FC = () => {
         totalTrips += day.trips.length;
         daysWorked++;
 
+        if (day.startTime && day.endTime) {
+          const start = new Date(`1970-01-01T${day.startTime}`);
+          let end = new Date(`1970-01-01T${day.endTime}`);
+          if (end < start) {
+            end.setDate(end.getDate() + 1);
+          }
+          const diffMs = end.getTime() - start.getTime();
+          totalMinutes += Math.floor(diffMs / 60000);
+        }
+
         day.trips.forEach(trip => {
           // Grupowanie po nazwie i stawce, aby rozróżnić kursy o innej cenie
           const key = `${trip.locationName}_${trip.rate}`;
@@ -181,6 +194,9 @@ const MonthlySummary: React.FC = () => {
     extras.sort((a, b) => b.date.localeCompare(a.date));
     setExtraEvents(extras);
 
+    const workedHours = Math.floor(totalMinutes / 60);
+    const workedMinutes = totalMinutes % 60;
+
     setStats({
       baseEarnings,
       fuelBonus,
@@ -199,7 +215,9 @@ const MonthlySummary: React.FC = () => {
       sickDays,
       tripEarnings,
       vacationEarnings,
-      sickLeaveEarnings
+      sickLeaveEarnings,
+      workedHours,
+      workedMinutes
     });
 
     const groupedArray = Object.values(grouped).sort((a, b) => a.name.localeCompare(b.name));
@@ -315,11 +333,55 @@ const MonthlySummary: React.FC = () => {
         });
     }
 
-    const finalY2 = (doc as any).lastAutoTable.finalY || 150;
+    const daysInMonth = new Date(Number(year), Number(month), 0).getDate();
+    const dailyRows = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+        const dayEntry = days.find(d => d.date === dateStr);
+        let statusText = "Dzien wolny";
+        
+        if (dayEntry) {
+            if (dayEntry.type === DayType.VACATION) statusText = "Urlop";
+            else if (dayEntry.type === DayType.SICK_LEAVE) statusText = "L4";
+            else if (dayEntry.type === DayType.WORK) {
+                if (dayEntry.startTime && dayEntry.endTime) {
+                    const start = new Date(`1970-01-01T${dayEntry.startTime}`);
+                    let end = new Date(`1970-01-01T${dayEntry.endTime}`);
+                    if (end < start) end.setDate(end.getDate() + 1);
+                    const mins = Math.floor((end.getTime() - start.getTime()) / 60000);
+                    const h = Math.floor(mins / 60);
+                    const m = mins % 60;
+                    statusText = `${h}h ${m.toString().padStart(2, '0')}m`;
+                } else {
+                    statusText = "Praca (brak godzin)";
+                }
+            }
+        }
+        dailyRows.push([`${String(i).padStart(2, '0')}.${String(month).padStart(2, '0')}.${year}`, removeDiacritics(statusText)]);
+    }
+
+    let finalY3 = (doc as any).lastAutoTable.finalY || 150;
+    doc.setFontSize(14);
+    doc.text(removeDiacritics("Ewidencja Czasu Pracy"), 14, finalY3 + 15);
+    
+    autoTable(doc, {
+        startY: finalY3 + 20,
+        head: [[removeDiacritics('Data'), removeDiacritics('Status / Czas pracy')]],
+        body: dailyRows,
+        theme: 'grid',
+        headStyles: { fillColor: [16, 185, 129] },
+        columnStyles: {
+            0: { cellWidth: 40 },
+            1: { cellWidth: 'auto' }
+        }
+    });
+
+    const finalY4 = (doc as any).lastAutoTable.finalY || 200;
     doc.setFontSize(10);
-    doc.text(removeDiacritics(`Lacznie kursow: ${stats.totalTrips}`), 14, finalY2 + 10);
-    doc.text(removeDiacritics(`Przewiezione tony: ${stats.totalTons.toFixed(2)}`), 14, finalY2 + 16);
-    doc.text(removeDiacritics(`Dni pracujace: ${stats.daysWorked}`), 14, finalY2 + 22);
+    doc.text(removeDiacritics(`Lacznie kursow: ${stats.totalTrips}`), 14, finalY4 + 10);
+    doc.text(removeDiacritics(`Przewiezione tony: ${stats.totalTons.toFixed(2)}`), 14, finalY4 + 16);
+    doc.text(removeDiacritics(`Dni pracujace: ${stats.daysWorked}`), 14, finalY4 + 22);
+    doc.text(removeDiacritics(`Laczny czas pracy: ${stats.workedHours}h ${stats.workedMinutes.toString().padStart(2, '0')}m`), 14, finalY4 + 28);
 
     doc.save(`Raport_Transkom_${year}_${month}.pdf`);
   };
