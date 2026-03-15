@@ -1,7 +1,7 @@
 
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { TrendingUp, Calendar, Briefcase, Truck, Wrench, Hourglass, Plus, PlusCircle, Thermometer, Palmtree, Trash2, Edit, Moon } from 'lucide-react';
+import { TrendingUp, Calendar, Briefcase, Truck, Wrench, Hourglass, Plus, PlusCircle, Thermometer, Palmtree, Trash2, Edit, Moon, Clock } from 'lucide-react';
 import { WorkDay, DayType } from '../types';
 import * as StorageService from '../services/storage';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Cell, LabelList } from 'recharts';
@@ -228,9 +228,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
               <div className="text-3xl font-bold">{monthStats.earned.toFixed(0)} zł</div>
               <div className={`text-xs mt-1 ${isCurrentMonth ? 'text-blue-200' : 'text-slate-300'}`}>Suma zarobków</div>
             </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold">{monthStats.workedHours}h <span className="text-base font-medium opacity-80">{monthStats.workedMinutes.toString().padStart(2, '0')}m</span></div>
-              <div className={`text-xs mt-1 ${isCurrentMonth ? 'text-blue-200' : 'text-slate-300'}`}>Czas pracy</div>
+            <div className={`text-right ${isCurrentMonth ? 'text-blue-100' : 'text-slate-300'}`}>
+              <div className="text-xl font-bold flex items-center justify-end gap-1">
+                <Clock size={16} /> {monthStats.workedHours}h {monthStats.workedMinutes.toString().padStart(2, '0')}m
+              </div>
+              <div className="text-[10px] uppercase tracking-wide opacity-80 mt-1">Czas pracy</div>
             </div>
           </div>
         </div>
@@ -258,9 +260,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
 
       {/* Scrollable Chart */}
       <div className="bg-white p-4 pb-2 rounded-xl shadow-sm border border-slate-100 flex flex-col">
-          <h3 className="text-sm font-bold text-slate-500 mb-2 flex-none uppercase tracking-wide text-center">
-            Wykres: {displayedMonthName}
-          </h3>
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-sm font-bold text-slate-500 flex-none uppercase tracking-wide">
+              Wykres: {displayedMonthName}
+            </h3>
+          </div>
           <div className="overflow-x-auto pb-2 -mx-2 px-2">
             <div style={{ width: `${chartWidth}px`, height: '140px' }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -280,7 +284,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                         tickLine={false}
                         tickFormatter={(value) => `${value}`}
                     />
-                    <Bar dataKey="zarobek" radius={[6, 6, 0, 0]} barSize={18}>
+                    <Bar dataKey="zarobek" radius={[6, 6, 0, 0]} barSize={9}>
                         <LabelList 
                             dataKey="zarobek" 
                             position="top" 
@@ -367,6 +371,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                         {day.type === DayType.WORK ? (
                             <>
                                 <span>{day.startTime} - {day.endTime}</span>
+                                {(() => {
+                                  if (day.startTime && day.endTime) {
+                                    const start = new Date(`1970-01-01T${day.startTime}`);
+                                    let end = new Date(`1970-01-01T${day.endTime}`);
+                                    if (end < start) end.setDate(end.getDate() + 1);
+                                    const diffMins = Math.floor((end.getTime() - start.getTime()) / 60000);
+                                    const h = Math.floor(diffMins / 60);
+                                    const m = diffMins % 60;
+                                    return <span className="font-bold text-slate-500">({h}h {m.toString().padStart(2, '0')}m)</span>;
+                                  }
+                                  return null;
+                                })()}
                                 {getRestTimeBadge(day)}
                             </>
                         ) : (

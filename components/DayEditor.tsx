@@ -167,7 +167,6 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
     setDay({
       ...day,
       trips: [
-        ...day.trips,
         {
           id: uuidv4(),
           locationId: '',
@@ -176,7 +175,8 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
           rate: 0,
           amount: 0,
           bonus: 0
-        }
+        },
+        ...day.trips
       ]
     });
   };
@@ -493,8 +493,16 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
 
         {day.type === DayType.WORK && (
           <section className="space-y-4 animate-fade-in">
-            <h3 className="text-sm font-semibold text-slate-700 px-1 uppercase tracking-wider">Lista Kursów</h3>
-            
+            <div className="flex justify-between items-center px-1">
+              <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Lista Kursów</h3>
+              <button 
+                onClick={addTrip}
+                className="text-blue-600 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors border border-blue-300 shadow-sm"
+              >
+                <Plus size={16} /> Dodaj kurs
+              </button>
+            </div>
+
             {day.trips.map((trip) => (
               <TripCard 
                 key={trip.id} 
@@ -504,20 +512,6 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                 onRemove={() => removeTrip(trip.id)}
               />
             ))}
-
-             <button 
-                onClick={addTrip}
-                className="w-full py-4 rounded-xl bg-primary text-white text-lg font-bold shadow-md shadow-blue-200 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-              >
-                <Plus size={24} /> Dodaj kurs
-              </button>
-
-             <button 
-                onClick={handleSave}
-                className="w-full py-4 rounded-xl bg-green-600 text-white text-lg font-bold shadow-md shadow-green-200 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-              >
-                <Save size={24} /> Zapisz i zamknij
-              </button>
           </section>
         )}
         
@@ -538,7 +532,6 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
            {day.type === DayType.WORK && (
              <>
              <div className="flex justify-between text-sm text-slate-300">
-                <span>Tony: {totals.totalWeight.toFixed(2)} t</span>
                 <span>Premia Paliwo (20%): {totals.totalBonus.toFixed(2)} zł</span>
              </div>
              <div className="flex justify-between text-sm text-slate-300">
@@ -557,11 +550,20 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
              </div>
              </>
            )}
-           <div className="flex justify-between items-end border-t border-slate-600 pt-2">
-              <span className="text-slate-300">Zarobek całkowity:</span>
-              <span className="text-2xl font-bold text-green-400">
-                {(totals.totalAmount + totals.totalBonus + (totals.totalHourlyBonus || 0) + (totals.totalWorkshop || 0) + (totals.totalWaiting || 0) + (totals.totalExtraHourly || 0)).toFixed(2)} zł
-              </span>
+           <div className="flex justify-between items-center border-t border-slate-600 pt-2 mt-2">
+              <div>
+                <div className="text-slate-300 text-xs mb-0.5">Zarobek całkowity:</div>
+                <div className="text-2xl font-bold text-green-400 leading-none">
+                  {(totals.totalAmount + totals.totalBonus + (totals.totalHourlyBonus || 0) + (totals.totalWorkshop || 0) + (totals.totalWaiting || 0) + (totals.totalExtraHourly || 0)).toFixed(2)} zł
+                </div>
+              </div>
+              <button 
+                onClick={handleSave} 
+                className="flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg hover:bg-green-700 transition active:scale-95"
+              >
+                <Save size={20} />
+                <span>Zapisz</span>
+              </button>
            </div>
       </div>
     </div>

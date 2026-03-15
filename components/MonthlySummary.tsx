@@ -411,20 +411,15 @@ const MonthlySummary: React.FC = () => {
               <FileDown size={16} /> PDF
             </button>
             <div className="flex gap-4 text-right">
-                 <div>
-                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-end gap-1">
-                        <Clock size={10}/> Czas
-                     </span>
-                     <div className="text-xl font-black text-slate-700 leading-none mt-1">
-                        {stats.workedHours}h <span className="text-sm font-medium text-slate-500">{stats.workedMinutes.toString().padStart(2, '0')}m</span>
-                     </div>
-                 </div>
-                 <div>
+                 <div className="flex flex-col items-end">
                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-end gap-1">
                         <Wallet size={10}/> Razem
                      </span>
                      <div className="text-xl font-black text-green-600 leading-none mt-1">
                         {stats.totalEarnings.toFixed(0)} <span className="text-sm font-medium text-green-500">zł</span>
+                     </div>
+                     <div className="text-[10px] font-bold text-slate-400 mt-1 flex items-center gap-1">
+                        <Clock size={10}/> {stats.workedHours}h {stats.workedMinutes.toString().padStart(2, '0')}m
                      </div>
                  </div>
             </div>
