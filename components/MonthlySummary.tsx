@@ -403,19 +403,29 @@ const MonthlySummary: React.FC = () => {
             />
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
             <button 
               onClick={handleExportPDF} 
               className="flex items-center gap-2 bg-red-50 text-red-600 px-3 py-2 rounded-lg text-xs font-bold border border-red-100 active:scale-95 transition"
             >
               <FileDown size={16} /> PDF
             </button>
-            <div className="text-right">
-                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-end gap-1">
-                    <Wallet size={12}/> Razem
-                 </span>
-                 <div className="text-3xl font-black text-green-600 leading-none mt-1">
-                    {stats.totalEarnings.toFixed(0)} <span className="text-sm font-medium text-green-500">zł</span>
+            <div className="flex gap-4 text-right">
+                 <div>
+                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-end gap-1">
+                        <Clock size={10}/> Czas
+                     </span>
+                     <div className="text-xl font-black text-slate-700 leading-none mt-1">
+                        {stats.workedHours}h <span className="text-sm font-medium text-slate-500">{stats.workedMinutes.toString().padStart(2, '0')}m</span>
+                     </div>
+                 </div>
+                 <div>
+                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-end gap-1">
+                        <Wallet size={10}/> Razem
+                     </span>
+                     <div className="text-xl font-black text-green-600 leading-none mt-1">
+                        {stats.totalEarnings.toFixed(0)} <span className="text-sm font-medium text-green-500">zł</span>
+                     </div>
                  </div>
             </div>
         </div>

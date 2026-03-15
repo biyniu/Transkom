@@ -14,7 +14,7 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
   const [days, setDays] = useState<WorkDay[]>([]);
-  const [monthStats, setMonthStats] = useState({ earned: 0, tons: 0, count: 0 });
+  const [monthStats, setMonthStats] = useState({ earned: 0, tons: 0, count: 0, workedHours: 0, workedMinutes: 0 });
   const [vacationStats, setVacationStats] = useState({ used: 0, remaining: 0 });
   
   // 0 = Current Month, 1 = Previous Month
@@ -44,6 +44,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
 
     const tons = selectedMonthDays.reduce((acc, d) => acc + d.totalWeight, 0);
     
+    let totalMinutes = 0;
+    selectedMonthDays.forEach(day => {
+        if (day.type === DayType.WORK && day.startTime && day.endTime) {
+            const start = new Date(`1970-01-01T${day.startTime}`);
+            let end = new Date(`1970-01-01T${day.endTime}`);
+            if (end < start) {
+                end.setDate(end.getDate() + 1);
+            }
+            const diffMs = end.getTime() - start.getTime();
+            totalMinutes += Math.floor(diffMs / 60000);
+        }
+    });
+    const workedHours = Math.floor(totalMinutes / 60);
+    const workedMinutes = totalMinutes % 60;
+
     // Vacation is usually calculated Annually, keeping it based on Current Year for "Remaining" logic
     const currentYear = new Date().getFullYear();
     const usedVacation = data.filter(d => 
@@ -54,7 +69,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
     setMonthStats({
       earned,
       tons,
-      count: selectedMonthDays.filter(d => d.type === DayType.WORK).length
+      count: selectedMonthDays.filter(d => d.type === DayType.WORK).length,
+      workedHours,
+      workedMinutes
     });
 
     setVacationStats({
@@ -201,11 +218,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
       <div className="grid grid-cols-2 gap-3">
         {/* Money Tile */}
         <div className={`col-span-2 rounded-2xl p-4 text-white shadow-lg transition-colors ${isCurrentMonth ? 'bg-gradient-to-br from-blue-600 to-blue-700 shadow-blue-200' : 'bg-gradient-to-br from-slate-600 to-slate-700 shadow-slate-200'}`}>
-          <div className={`flex items-center gap-2 mb-1 text-xs uppercase tracking-wide font-bold ${isCurrentMonth ? 'text-blue-100' : 'text-slate-200'}`}>
-            <TrendingUp size={14} /> {isCurrentMonth ? 'Ten miesiąc' : 'Poprzedni miesiąc'}
+          <div className={`flex items-center justify-between mb-1 text-xs uppercase tracking-wide font-bold ${isCurrentMonth ? 'text-blue-100' : 'text-slate-200'}`}>
+            <div className="flex items-center gap-2">
+              <TrendingUp size={14} /> {isCurrentMonth ? 'Ten miesiąc' : 'Poprzedni miesiąc'}
+            </div>
           </div>
-          <div className="text-3xl font-bold">{monthStats.earned.toFixed(0)} zł</div>
-          <div className={`text-xs mt-1 ${isCurrentMonth ? 'text-blue-200' : 'text-slate-300'}`}>Suma zarobków</div>
+          <div className="flex items-end justify-between">
+            <div>
+              <div className="text-3xl font-bold">{monthStats.earned.toFixed(0)} zł</div>
+              <div className={`text-xs mt-1 ${isCurrentMonth ? 'text-blue-200' : 'text-slate-300'}`}>Suma zarobków</div>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold">{monthStats.workedHours}h <span className="text-base font-medium opacity-80">{monthStats.workedMinutes.toString().padStart(2, '0')}m</span></div>
+              <div className={`text-xs mt-1 ${isCurrentMonth ? 'text-blue-200' : 'text-slate-300'}`}>Czas pracy</div>
+            </div>
+          </div>
         </div>
 
         {/* Tons Tile */}
@@ -235,7 +262,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
             Wykres: {displayedMonthName}
           </h3>
           <div className="overflow-x-auto pb-2 -mx-2 px-2">
-            <div style={{ width: `${chartWidth}px`, height: '280px' }}>
+            <div style={{ width: `${chartWidth}px`, height: '140px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData} margin={{ top: 25, right: 10, left: -25, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -253,7 +280,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                         tickLine={false}
                         tickFormatter={(value) => `${value}`}
                     />
-                    <Bar dataKey="zarobek" radius={[6, 6, 0, 0]} barSize={36}>
+                    <Bar dataKey="zarobek" radius={[6, 6, 0, 0]} barSize={18}>
                         <LabelList 
                             dataKey="zarobek" 
                             position="top" 
