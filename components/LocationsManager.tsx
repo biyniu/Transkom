@@ -62,7 +62,6 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
   };
 
   const openEditForm = (loc: LocationRate) => {
-    if (mode !== 'ADMIN') return;
     setEditingId(loc.id);
     setFormData({ name: loc.name, rate: loc.rate.toString() });
     setIsFormOpen(true);
@@ -280,106 +279,127 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
       <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
         
         {isFormOpen && (
-          <div className="bg-white p-4 rounded-xl border-2 border-blue-100 shadow-md animate-fade-in mb-4">
-            <div className="flex justify-between items-center mb-3 border-b border-slate-100 pb-2">
-              <h3 className="text-sm font-bold text-blue-800">
-                {editingId ? 'Edytuj wpis' : 'Nowy wpis do bazy'}
-              </h3>
-              <button onClick={closeForm} className="text-slate-400 hover:text-slate-600">
-                <X size={18} />
-              </button>
-            </div>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white w-full max-w-lg p-6 rounded-2xl shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
+                <h3 className="text-lg font-bold text-blue-800">
+                  {editingId ? 'Edytuj wpis' : 'Nowy wpis do bazy'}
+                </h3>
+                <button onClick={closeForm} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition">
+                  <X size={20} />
+                </button>
+              </div>
 
-            {!editingId && (
-              <div className="bg-slate-50 border border-blue-200 rounded-lg p-3 mb-4 space-y-3">
-                 <div className="flex gap-2 border-b border-blue-200 pb-0">
+              {!editingId && (
+                <div className="bg-slate-50 border border-blue-100 rounded-xl p-4 mb-6">
+                   <div className="flex gap-2 mb-4 bg-white p-1 rounded-lg border border-slate-200">
+                      <button 
+                          onClick={() => setInfoTab('RULES')}
+                          className={`flex-1 py-2 text-xs font-bold transition-all rounded-md ${infoTab === 'RULES' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-50'}`}
+                      >
+                          <span className="flex items-center justify-center gap-1"><Info size={14}/> Zasady</span>
+                      </button>
+                      <button 
+                          onClick={() => setInfoTab('TABLE')}
+                          className={`flex-1 py-2 text-xs font-bold transition-all rounded-md ${infoTab === 'TABLE' ? 'bg-green-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-50'}`}
+                      >
+                           <span className="flex items-center justify-center gap-1"><TableProperties size={14}/> Stawki km</span>
+                      </button>
+                   </div>
+
+                   {infoTab === 'RULES' && (
+                      <div className="text-xs text-slate-700 animate-fade-in">
+                          <ul className="space-y-2">
+                              <li className="flex flex-col p-2 bg-white rounded-lg border border-blue-50">
+                                  <span className="font-bold text-slate-900">1. Szymiszów:</span>
+                                  <span className="text-slate-500">Cel i Firma (Np: Wrocław DROGBUD)</span>
+                              </li>
+                              <li className="flex flex-col p-2 bg-white rounded-lg border border-blue-50">
+                                  <span className="font-bold text-slate-900">2. Poborszów:</span>
+                                  <span className="text-slate-500">Poborszów - Cel FIRMA (Np: Poborszów - Opole SANDMIX)</span>
+                              </li>
+                              <li className="flex flex-col p-2 bg-white rounded-lg border border-blue-50">
+                                  <span className="font-bold text-slate-900">3. Inne:</span>
+                                  <span className="text-slate-500">Start - Cel FIRMA</span>
+                              </li>
+                          </ul>
+                      </div>
+                   )}
+
+                   {infoTab === 'TABLE' && (
+                       <div className="animate-fade-in">
+                          <div className="max-h-48 overflow-y-auto rounded-lg border border-green-200 shadow-inner">
+                              <table className="w-full text-xs">
+                                  <thead className="bg-green-100 text-green-800 font-bold sticky top-0 z-10">
+                                      <tr>
+                                          <th className="p-2 border-b border-green-200 text-center">Dystans</th>
+                                          <th className="p-2 border-b border-green-200 text-center">Stawka</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-green-50 bg-white">
+                                      {RATE_TABLE_DATA.map((row, idx) => (
+                                          <tr key={idx} className="hover:bg-green-50/50">
+                                              <td className="p-2 text-center text-slate-600">{row.min} - {row.max} km</td>
+                                              <td className="p-2 text-center font-bold text-green-700">{row.rate}</td>
+                                          </tr>
+                                      ))}
+                                  </tbody>
+                              </table>
+                          </div>
+                       </div>
+                   )}
+                </div>
+              )}
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nazwa miejscowości / Firmy</label>
+                  <input 
+                    type="text" 
+                    autoFocus={!editingId} 
+                    placeholder="Np. Wrocław DROGBUD" 
+                    value={formData.name}
+                    onChange={e => setFormData({...formData, name: e.target.value})}
+                    className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-slate-50 transition-all shadow-inner"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Stawka (zł/t)</label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    placeholder="0.00" 
+                    value={formData.rate}
+                    onChange={e => setFormData({...formData, rate: e.target.value})}
+                    className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-mono bg-slate-50 transition-all shadow-inner"
+                  />
+                </div>
+                <div className="flex flex-col gap-3 mt-6">
+                  <button 
+                    onClick={handleSave} 
+                    className="bg-blue-600 text-white w-full py-4 rounded-xl flex items-center justify-center gap-2 font-bold hover:bg-blue-700 active:scale-[0.98] transition-all shadow-lg shadow-blue-200"
+                  >
+                    <Save size={20} /> Zapisz w Bazie
+                  </button>
+                  {editingId && (
                     <button 
-                        onClick={() => setInfoTab('RULES')}
-                        className={`flex-1 py-2 text-xs font-bold transition-all rounded-t-lg border-b-2 ${infoTab === 'RULES' ? 'bg-blue-100 text-blue-800 border-blue-600' : 'text-blue-600 border-transparent hover:bg-blue-50'}`}
+                      onClick={() => {
+                        handleDelete(editingId);
+                        closeForm();
+                      }}
+                      className="w-full py-3 text-red-500 font-bold hover:text-red-700 hover:bg-red-50 rounded-xl transition-all flex items-center justify-center gap-2"
                     >
-                        <span className="flex items-center justify-center gap-1"><Info size={14}/> Zasady</span>
+                      <Trash2 size={18} /> Usuń z Bazy
                     </button>
-                    <button 
-                        onClick={() => setInfoTab('TABLE')}
-                        className={`flex-1 py-2 text-xs font-bold transition-all rounded-t-lg border-b-2 ${infoTab === 'TABLE' ? 'bg-green-100 text-green-800 border-green-600' : 'text-green-600 border-transparent hover:bg-green-50'}`}
-                    >
-                         <span className="flex items-center justify-center gap-1"><TableProperties size={14}/> Stawki km</span>
-                    </button>
-                 </div>
-
-                 {infoTab === 'RULES' && (
-                    <div className="text-xs text-slate-700 animate-fade-in bg-blue-50/50 p-2 rounded-b-lg">
-                        <ul className="space-y-2 mt-2">
-                            <li className="flex flex-col">
-                                <span className="font-semibold text-slate-900">1. Szymiszów:</span>
-                                <span>Cel i Firma (Np: Wrocław DROGBUD)</span>
-                            </li>
-                            <li className="flex flex-col">
-                                <span className="font-semibold text-slate-900">2. Poborszów:</span>
-                                <span>Poborszów - Cel FIRMA (Np: Poborszów - Opole SANDMIX)</span>
-                            </li>
-                            <li className="flex flex-col">
-                                <span className="font-semibold text-slate-900">3. Inne:</span>
-                                <span>Start - Cel FIRMA</span>
-                            </li>
-                        </ul>
-                    </div>
-                 )}
-
-                 {infoTab === 'TABLE' && (
-                     <div className="animate-fade-in bg-green-50/50 p-2 rounded-b-lg">
-                        <div className="max-h-48 overflow-y-auto rounded border border-green-200">
-                            <table className="w-full text-xs">
-                                <thead className="bg-green-100 text-green-800 font-bold sticky top-0 z-10 shadow-sm">
-                                    <tr>
-                                        <th className="p-2 border-b border-green-200 text-center">Dystans</th>
-                                        <th className="p-2 border-b border-green-200 text-center">Stawka</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-green-100 bg-white">
-                                    {RATE_TABLE_DATA.map((row, idx) => (
-                                        <tr key={idx} className="hover:bg-green-50">
-                                            <td className="p-2 text-center text-slate-600">{row.min} - {row.max} km</td>
-                                            <td className="p-2 text-center font-bold text-green-700">{row.rate}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                     </div>
-                 )}
+                  )}
+                  <button 
+                    onClick={closeForm}
+                    className="w-full py-3 text-slate-500 font-bold hover:text-slate-700 hover:bg-slate-50 rounded-xl transition-all"
+                  >
+                    Anuluj
+                  </button>
+                </div>
               </div>
-            )}
-            
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Nazwa miejscowości / Firmy</label>
-                <input 
-                  type="text" 
-                  autoFocus={!editingId} 
-                  placeholder="Np. Wrocław DROGBUD" 
-                  value={formData.name}
-                  onChange={e => setFormData({...formData, name: e.target.value})}
-                  className="w-full p-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Stawka (zł/t)</label>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  placeholder="0.00" 
-                  value={formData.rate}
-                  onChange={e => setFormData({...formData, rate: e.target.value})}
-                  className="w-full p-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none font-mono bg-slate-50"
-                />
-              </div>
-              <button 
-                onClick={handleSave} 
-                className="bg-blue-600 text-white w-full py-3 rounded-lg flex items-center justify-center gap-2 font-bold hover:bg-blue-700 active:scale-95 transition-transform"
-              >
-                <Save size={18} /> Zapisz w Bazie
-              </button>
             </div>
           </div>
         )}
@@ -399,12 +419,12 @@ const LocationsManager: React.FC<LocationsManagerProps> = ({ mode = 'ADMIN' }) =
                       Stawka: <span className="font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{loc.rate.toFixed(2)} zł</span>
                     </div>
                   </div>
-                  {mode === 'ADMIN' && (
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => openEditForm(loc)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"><Edit2 size={18} /></button>
-                        <button onClick={() => handleDelete(loc.id)} className="p-2 text-slate-400 hover:text-danger hover:bg-red-50 rounded-lg transition"><Trash2 size={18} /></button>
-                      </div>
-                  )}
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => openEditForm(loc)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"><Edit2 size={18} /></button>
+                    {mode === 'ADMIN' && (
+                      <button onClick={() => handleDelete(loc.id)} className="p-2 text-slate-400 hover:text-danger hover:bg-red-50 rounded-lg transition"><Trash2 size={18} /></button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>

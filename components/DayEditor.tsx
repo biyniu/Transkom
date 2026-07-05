@@ -601,6 +601,9 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                     {showWaiting && totals.totalWaiting > 0 ? (
                         <span className="block text-yellow-300 text-xs">Oczekiwanie: {totals.totalWaiting.toFixed(2)} zł</span>
                     ) : null}
+                    {totals.saturdayBonus > 0 ? (
+                        <span className="block text-orange-400 text-xs font-bold uppercase">Sobota: +{totals.saturdayBonus.toFixed(2)} zł</span>
+                    ) : null}
                 </div>
              </div>
              </>
@@ -609,7 +612,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
               <div>
                 <div className="text-slate-300 text-xs mb-0.5">Zarobek całkowity:</div>
                 <div className="text-2xl font-bold text-green-400 leading-none">
-                  {(totals.totalAmount + totals.totalBonus + (totals.totalHourlyBonus || 0) + (totals.totalWorkshop || 0) + (totals.totalWaiting || 0) + (totals.totalExtraHourly || 0)).toFixed(2)} zł
+                  {(totals.totalAmount + totals.totalBonus + (totals.totalHourlyBonus || 0) + (totals.totalWorkshop || 0) + (totals.totalWaiting || 0) + (totals.totalExtraHourly || 0) + (totals.saturdayBonus || 0)).toFixed(2)} zł
                 </div>
               </div>
               <button 

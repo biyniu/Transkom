@@ -397,8 +397,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                     {day.type === DayType.WORK ? (
                       <>
                         <div className="font-bold text-green-600">
-                          +{(day.totalAmount + day.totalBonus + (day.totalHourlyBonus || 0) + (day.totalWorkshop || 0) + (day.totalWaiting || 0) + (day.totalExtraHourly || 0)).toFixed(2)} zł
+                          +{(day.totalAmount + day.totalBonus + (day.totalHourlyBonus || 0) + (day.totalWorkshop || 0) + (day.totalWaiting || 0) + (day.totalExtraHourly || 0) + (day.saturdayBonus || 0)).toFixed(2)} zł
                         </div>
+                        {day.saturdayBonus ? (
+                          <div className="text-[10px] text-orange-600 font-bold uppercase tracking-tight">+70 zł Sobota</div>
+                        ) : null}
                         <div className="text-xs text-slate-400">{day.trips.length} kursy</div>
                       </>
                     ) : (

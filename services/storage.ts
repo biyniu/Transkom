@@ -310,6 +310,17 @@ export const calculateDayTotals = (day: WorkDay): WorkDay => {
   const extraHourlyHours = day.extraHourlyHours || 0;
   const totalExtraHourly = extraHourlyHours * settings.extraHourlyRate;
 
+  // Saturday Bonus: If WORK day and day of week is Saturday (6)
+  let saturdayBonus = 0;
+  if (day.type === DayType.WORK && day.date) {
+    const [y, m, dPart] = day.date.split('-').map(Number);
+    const d = new Date(y, m - 1, dPart);
+    // getDay() returns 0 for Sunday, 6 for Saturday
+    if (d.getDay() === 6) {
+      saturdayBonus = 70;
+    }
+  }
+
   const recalculatedTrips = day.trips.map(trip => {
     const { amount, bonus } = calculateTrip(trip.weight, trip.rate);
     totalAmount += amount;
@@ -327,6 +338,7 @@ export const calculateDayTotals = (day: WorkDay): WorkDay => {
     totalWorkshop,
     totalWaiting,
     totalExtraHourly,
+    saturdayBonus,
     totalWeight
   };
 };

@@ -53,6 +53,7 @@ const MonthlySummary: React.FC = () => {
 
     extraHourlyHours: 0,
     extraHourlyMoney: 0,
+    saturdayBonus: 0,
 
     totalEarnings: 0,
     totalTons: 0,
@@ -92,6 +93,7 @@ const MonthlySummary: React.FC = () => {
     let waitingMoney = 0;
     let extraHourlyHours = 0;
     let extraHourlyMoney = 0;
+    let saturdayBonus = 0;
     let totalTons = 0;
     let totalTrips = 0;
     let daysWorked = 0;
@@ -147,6 +149,10 @@ const MonthlySummary: React.FC = () => {
             hours: day.extraHourlyHours,
             amount: amount
         });
+      }
+
+      if (day.saturdayBonus && day.saturdayBonus > 0) {
+        saturdayBonus += day.saturdayBonus;
       }
 
       totalTons += day.totalWeight;
@@ -207,7 +213,8 @@ const MonthlySummary: React.FC = () => {
       waitingMoney,
       extraHourlyHours,
       extraHourlyMoney,
-      totalEarnings: baseEarnings + fuelBonus + hourlyBonus + workshopMoney + waitingMoney + extraHourlyMoney,
+      saturdayBonus,
+      totalEarnings: baseEarnings + fuelBonus + hourlyBonus + workshopMoney + waitingMoney + extraHourlyMoney + saturdayBonus,
       totalTons,
       totalTrips,
       daysWorked,
@@ -256,7 +263,14 @@ const MonthlySummary: React.FC = () => {
       ["Premia Godzinowa (Czas Pracy)", `${stats.hourlyBonus.toFixed(2)} zl`],
       [`Praca na Godziny (${stats.extraHourlyHours}h)`, `${stats.extraHourlyMoney.toFixed(2)} zl`],
       [`Warsztat (${stats.workshopHours}h)`, `${stats.workshopMoney.toFixed(2)} zl`],
-      [`Postoj (${stats.waitingHours}h)`, `${stats.waitingMoney.toFixed(2)} zl`],
+      [`Postoj (${stats.waitingHours}h)`, `${stats.waitingMoney.toFixed(2)} zl`]
+    );
+
+    if (stats.saturdayBonus > 0) {
+        summaryData.push(["Dodatek Sobota", `${stats.saturdayBonus.toFixed(2)} zl`]);
+    }
+
+    summaryData.push(
       ["-----------------", "----------"],
       ["RAZEM", `${stats.totalEarnings.toFixed(2)} zl`]
     );
@@ -481,6 +495,13 @@ const MonthlySummary: React.FC = () => {
                      {stats.waitingMoney > 0 ? `${stats.waitingMoney.toFixed(0)} zł` : '-'}
                 </div>
             </div>
+
+            {stats.saturdayBonus > 0 && (
+               <div className="bg-orange-100 p-2 rounded-lg border border-orange-200 text-center col-span-4 mt-2">
+                   <div className="text-[10px] font-bold text-orange-600 uppercase tracking-wide mb-1">Dodatki Sobotnie</div>
+                   <div className="font-black text-orange-700 text-sm">{stats.saturdayBonus.toFixed(0)} zł</div>
+               </div>
+            )}
          </div>
       </div>
 

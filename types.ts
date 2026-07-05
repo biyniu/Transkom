@@ -65,6 +65,8 @@ export interface WorkDay {
   extraHourlyHours?: number; // NOWA: Ilość godzin pracy dodatkowej
   totalExtraHourly?: number; // NOWA: Zarobek z pracy dodatkowej (h * extraHourlyRate)
 
+  saturdayBonus?: number; // NOWA: Dodatek za pracującą sobotę (70 zł)
+
   totalWeight: number; // Suma ton
   note: string;
 }
