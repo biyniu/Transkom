@@ -83,7 +83,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm('Czy usunąć ten dzień?')) {
+    if (window.confirm('Czy na pewno chcesz usunąć ten dzień?')) {
       StorageService.deleteDay(id);
       setDays(StorageService.getWorkDays());
     }
@@ -421,6 +421,24 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                 {/* Mini preview of trips + extra work */}
                 {day.type === DayType.WORK && (
                   <>
+                  {/* Estimated Stats Summary */}
+                  {day.trips.length > 0 && (
+                    <div className="mt-2 p-2 bg-blue-50/30 rounded-lg border border-blue-100 flex flex-col gap-1 animate-fade-in">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Szacowany zarobek:</span>
+                        <span className="text-xs font-black text-blue-700">
+                          {(day.trips.reduce((acc, t) => acc + (t.rate > 10 ? t.rate / 27 : (t.rate || 0)), 0) * 27 * 1.20).toFixed(2)} zł
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Stawka dnia:</span>
+                        <span className="text-xs font-bold text-slate-600">
+                          {day.trips.reduce((acc, t) => acc + (t.rate > 10 ? t.rate / 27 : (t.rate || 0)), 0).toFixed(2)} zł
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="mt-2 pt-2 border-t border-slate-50 text-xs text-slate-500 truncate flex flex-wrap gap-2">
                     {day.totalExtraHourly && day.totalExtraHourly > 0 ? (
                         <span className="flex items-center gap-1 text-indigo-500 font-semibold"><Briefcase size={12}/> Praca na godziny</span>

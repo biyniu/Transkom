@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, Save, ArrowLeft, Clock, Search, X, Wrench, Hourglass, Thermometer, Moon, Briefcase, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, Save, ArrowLeft, Clock, Search, X, Wrench, Hourglass, Thermometer, Moon, Briefcase, AlertTriangle, ChevronDown, ChevronUp, Edit, Check } from 'lucide-react';
 import { WorkDay, DayType, LocationRate, Trip, AppSettings } from '../types';
 import * as StorageService from '../services/storage';
 
@@ -22,6 +22,10 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
   // State for Daily Rest Calculation
   const [restInfo, setRestInfo] = useState<{ label: string; colorClass: string } | null>(null);
   const [isExtrasExpanded, setIsExtrasExpanded] = useState(false);
+
+  // State for Trip Modal
+  const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+  const [isTripModalOpen, setIsTripModalOpen] = useState(false);
 
   const [day, setDay] = useState<WorkDay>({
     id: new Date().toISOString().slice(0, 10), // Default ID is today's date
@@ -164,25 +168,41 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
   };
 
   const addTrip = () => {
-    setDay({
-      ...day,
-      trips: [
-        {
-          id: uuidv4(),
-          locationId: '',
-          locationName: '',
-          weight: 0,
-          rate: 0,
-          amount: 0,
-          bonus: 0
-        },
-        ...day.trips
-      ]
-    });
+    const newTrip: Trip = {
+      id: uuidv4(),
+      locationId: '',
+      locationName: '',
+      weight: 0,
+      rate: 0,
+      amount: 0,
+      bonus: 0
+    };
+    setEditingTrip(newTrip);
+    setIsTripModalOpen(true);
+  };
+
+  const openEditTrip = (trip: Trip) => {
+    setEditingTrip({ ...trip });
+    setIsTripModalOpen(true);
+  };
+
+  const handleSaveTrip = (updatedTrip: Trip) => {
+    const tripExists = day.trips.find(t => t.id === updatedTrip.id);
+    let updatedTrips;
+    if (tripExists) {
+      updatedTrips = day.trips.map(t => t.id === updatedTrip.id ? updatedTrip : t);
+    } else {
+      updatedTrips = [updatedTrip, ...day.trips];
+    }
+    setDay({ ...day, trips: updatedTrips });
+    setIsTripModalOpen(false);
+    setEditingTrip(null);
   };
 
   const removeTrip = (id: string) => {
-    setDay({ ...day, trips: day.trips.filter(t => t.id !== id) });
+    if (window.confirm('Czy na pewno chcesz usunąć ten kurs?')) {
+      setDay({ ...day, trips: day.trips.filter(t => t.id !== id) });
+    }
   };
 
   const handleSave = () => {
@@ -333,6 +353,14 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                         <input 
                         type="time" 
                         value={day.endTime}
+                        onFocus={() => {
+                          if (day.endTime === '04:00') {
+                            const now = new Date();
+                            const hh = String(now.getHours()).padStart(2, '0');
+                            const mm = String(now.getMinutes()).padStart(2, '0');
+                            setDay({...day, endTime: `${hh}:${mm}`});
+                          }
+                        }}
                         onChange={e => setDay({...day, endTime: e.target.value})}
                         className="w-full p-3 border border-slate-300 rounded-lg text-center bg-gray-50 text-lg"
                         />
@@ -507,14 +535,41 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
               <TripCard 
                 key={trip.id} 
                 trip={trip} 
-                locations={locations}
-                onChange={(field, val) => handleTripChange(trip.id, field, val)}
+                onEdit={() => openEditTrip(trip)}
                 onRemove={() => removeTrip(trip.id)}
               />
             ))}
+
+            {isTripModalOpen && editingTrip && (
+              <TripModal 
+                trip={editingTrip}
+                locations={locations}
+                onSave={handleSaveTrip}
+                onClose={() => setIsTripModalOpen(false)}
+              />
+            )}
           </section>
         )}
         
+        {day.type === DayType.WORK && day.trips.length > 0 && (
+          <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 space-y-2 animate-fade-in">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Stawka Dnia (suma stawek):</span>
+              <span className="font-bold text-blue-700">
+                {day.trips.reduce((acc, t) => acc + (t.rate > 10 ? t.rate / 27 : (t.rate || 0)), 0).toFixed(2)} zł
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Szacunkowy zarobek (27 t + 20%):</span>
+              <div className="text-right">
+                <span className="text-xl font-black text-blue-800">
+                  {(day.trips.reduce((acc, t) => acc + (t.rate > 10 ? t.rate / 27 : (t.rate || 0)), 0) * 27 * 1.20).toFixed(2)} zł
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white p-4 rounded-xl shadow-sm">
            <label className="block text-xs font-medium text-slate-500 mb-1">Notatki / Tankowanie</label>
            <textarea 
@@ -570,22 +625,52 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
   );
 };
 
-// Sub-component for Trip Card
+// Sub-component for Trip Card (Summary View)
 const TripCard: React.FC<{
   trip: Trip;
-  locations: LocationRate[];
-  onChange: (field: keyof Trip, value: any) => void;
+  onEdit: () => void;
   onRemove: () => void;
-}> = ({ trip, locations, onChange, onRemove }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+}> = ({ trip, onEdit, onRemove }) => {
+  return (
+    <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between group active:bg-slate-50 transition-colors" onClick={onEdit}>
+      <div className="flex-1 min-w-0">
+        <div className="font-bold text-slate-700 truncate">{trip.locationName || 'Nowy kurs...'}</div>
+        <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
+          <span className="font-medium bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
+            {trip.rate > 10 ? 'Ryczałt' : `${trip.weight} t`}
+          </span>
+          <span className="font-bold text-green-600">{trip.amount.toFixed(2)} zł</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-1 ml-2">
+        <button 
+          onClick={(e) => { e.stopPropagation(); onEdit(); }} 
+          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+        >
+          <Edit size={18} />
+        </button>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onRemove(); }} 
+          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition"
+        >
+          <Trash2 size={18} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// New Modal Component for Trip Editing
+const TripModal: React.FC<{
+  trip: Trip;
+  locations: LocationRate[];
+  onSave: (updatedTrip: Trip) => void;
+  onClose: () => void;
+}> = ({ trip, locations, onSave, onClose }) => {
+  const [localTrip, setLocalTrip] = useState<Trip>({ ...trip });
+  const [searchTerm, setSearchTerm] = useState(trip.locationName || '');
   const [isSearching, setIsSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (trip.locationName && !isSearching) {
-      setSearchTerm(trip.locationName);
-    }
-  }, [trip.locationName, isSearching]);
 
   const filteredLocations = locations.filter(l => 
     l.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -594,100 +679,127 @@ const TripCard: React.FC<{
   const handleSelectLocation = (loc: LocationRate) => {
     setSearchTerm(loc.name);
     setIsSearching(false);
-    onChange('locationId', loc.id);
+    
+    const updatedTrip = { ...localTrip };
+    updatedTrip.locationId = loc.id;
+    updatedTrip.locationName = loc.name;
+    updatedTrip.rate = loc.rate;
+    if (loc.rate > 10) {
+      updatedTrip.weight = 1;
+    }
+    
+    const { amount, bonus } = StorageService.calculateTrip(updatedTrip.weight, updatedTrip.rate);
+    updatedTrip.amount = amount;
+    updatedTrip.bonus = bonus;
+    
+    setLocalTrip(updatedTrip);
   };
 
-  const isFixedRate = trip.rate > 10;
+  const handleWeightChange = (val: number) => {
+    const updatedTrip = { ...localTrip, weight: val };
+    const { amount, bonus } = StorageService.calculateTrip(updatedTrip.weight, updatedTrip.rate);
+    updatedTrip.amount = amount;
+    updatedTrip.bonus = bonus;
+    setLocalTrip(updatedTrip);
+  };
+
+  const isFixedRate = localTrip.rate > 10;
 
   return (
-    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 relative">
-      <div className="grid grid-cols-12 gap-3">
-        <div className="col-span-12 relative">
-          <label className="block text-xs font-medium text-slate-500 mb-1">Miejscowość</label>
-          <div className="relative">
-             <div className="absolute left-3 top-3 text-slate-400">
-               <Search size={18} />
-             </div>
-             <input
-              ref={inputRef}
-              type="text"
-              value={searchTerm}
-              onFocus={() => setIsSearching(true)}
-              onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  // FIX: Update the parent state immediately on type
-                  onChange('locationName', e.target.value);
-              }}
-              placeholder="Szukaj miejscowości..."
-              className="w-full p-2 pl-10 border border-slate-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"
-             />
-             {isSearching && (
-               <button 
-                onClick={() => { setIsSearching(false); setSearchTerm(trip.locationName); }} 
-                className="absolute right-2 top-2 p-1 text-slate-400"
-               >
-                 <X size={18}/>
-               </button>
-             )}
-          </div>
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+      
+      <div className="relative w-full max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-slide-up">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="font-bold text-slate-800 uppercase tracking-tight">Dane Kursu</h3>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full">
+            <X size={20} />
+          </button>
+        </div>
 
-          {isSearching && (
-            <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
-              {filteredLocations.length === 0 ? (
-                 <div className="p-3 text-sm text-slate-400 text-center">Brak wyników</div>
-              ) : (
-                filteredLocations.map(loc => (
-                  <button
-                    key={loc.id}
-                    onClick={() => handleSelectLocation(loc)}
-                    className="w-full text-left p-3 hover:bg-blue-50 border-b border-slate-50 last:border-0 flex justify-between items-center"
-                  >
-                    <span className="font-medium text-slate-700">{loc.name}</span>
-                    <span className="text-xs font-mono text-slate-400 bg-slate-100 px-2 py-1 rounded">{loc.rate} zł</span>
-                  </button>
-                ))
+        <div className="flex-1 overflow-y-auto p-4 space-y-5">
+          <div className="relative">
+            <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5 ml-1">Miejscowość docelowa</label>
+            <div className="relative">
+              <div className="absolute left-3 top-3.5 text-slate-400">
+                <Search size={18} />
+              </div>
+              <input
+                ref={inputRef}
+                type="text"
+                value={searchTerm}
+                onFocus={() => setIsSearching(true)}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Gdzie jedziesz?"
+                className="w-full p-3.5 pl-10 border-2 border-slate-100 rounded-xl bg-slate-50 focus:border-blue-500 focus:bg-white outline-none transition-all font-medium"
+              />
+              {searchTerm && (
+                <button onClick={() => setSearchTerm('')} className="absolute right-3 top-3.5 p-1 text-slate-300">
+                  <X size={16} />
+                </button>
               )}
             </div>
-          )}
-        </div>
 
-        <div className="col-span-4">
-          <label className="block text-xs font-medium text-slate-500 mb-1">
-             {isFixedRate ? 'Ryczałt' : 'Tony'}
-          </label>
-          <input 
-            type="number" 
-            step="0.1"
-            value={trip.weight || ''}
-            onChange={(e) => onChange('weight', parseFloat(e.target.value) || 0)}
-            disabled={isFixedRate}
-            className={`w-full p-2 border border-slate-300 rounded-lg font-mono ${isFixedRate ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-gray-50'}`}
-            placeholder="0"
-          />
-        </div>
-        <div className="col-span-4">
-          <label className="block text-xs font-medium text-slate-500 mb-1">Stawka</label>
-          <input 
-            type="number" 
-            disabled
-            value={trip.rate}
-            className="w-full p-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-500"
-          />
-        </div>
-        <div className="col-span-4">
-          <label className="block text-xs font-medium text-slate-500 mb-1">Suma</label>
-          <div className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-700 text-right">
-            {trip.amount.toFixed(2)}
+            {isSearching && (
+              <div className="absolute z-50 left-0 right-0 top-full mt-2 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-60 overflow-y-auto overflow-x-hidden ring-1 ring-black/5">
+                {filteredLocations.length === 0 ? (
+                  <div className="p-4 text-sm text-slate-400 text-center italic">Nie znaleziono miejscowości</div>
+                ) : (
+                  filteredLocations.map(loc => (
+                    <button
+                      key={loc.id}
+                      onClick={() => handleSelectLocation(loc)}
+                      className="w-full text-left p-4 hover:bg-blue-50 border-b border-slate-50 last:border-0 flex justify-between items-center transition-colors group"
+                    >
+                      <span className="font-bold text-slate-700 group-hover:text-blue-700">{loc.name}</span>
+                      <span className="text-xs font-mono font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded group-hover:bg-blue-100 group-hover:text-blue-600">{loc.rate} zł</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className={isFixedRate ? 'opacity-50' : ''}>
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5 ml-1">
+                {isFixedRate ? 'Ryczałt' : 'Waga (Tony)'}
+              </label>
+              <input 
+                type="number" 
+                step="0.1"
+                value={localTrip.weight || ''}
+                onChange={(e) => handleWeightChange(parseFloat(e.target.value) || 0)}
+                disabled={isFixedRate}
+                className="w-full p-3.5 border-2 border-slate-100 rounded-xl bg-slate-50 font-bold text-lg focus:border-blue-500 focus:bg-white outline-none"
+                placeholder="0.0"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5 ml-1">Stawka kursu</label>
+              <div className="w-full p-3.5 bg-slate-100 rounded-xl font-bold text-lg text-slate-500 border-2 border-transparent">
+                {localTrip.rate} <span className="text-xs font-normal">zł</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 p-4 rounded-2xl flex items-center justify-between">
+            <span className="text-blue-700 font-bold uppercase text-xs tracking-wider">Zarobek za ten kurs:</span>
+            <span className="text-2xl font-black text-blue-800">{localTrip.amount.toFixed(2)} <span className="text-sm font-bold">zł</span></span>
           </div>
         </div>
+
+        <div className="p-4 bg-slate-50 rounded-b-3xl sm:rounded-b-2xl border-t border-slate-100">
+          <button 
+            onClick={() => onSave(localTrip)}
+            disabled={!localTrip.locationId}
+            className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase tracking-widest shadow-xl shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale flex items-center justify-center gap-2"
+          >
+            <Check size={20} strokeWidth={3} />
+            Zatwierdź Kurs
+          </button>
+        </div>
       </div>
-      
-      <button 
-        onClick={onRemove}
-        className="absolute -top-2 -right-2 bg-white text-danger border border-slate-200 p-1.5 rounded-full shadow-sm"
-      >
-        <Trash2 size={16} />
-      </button>
     </div>
   );
 };
