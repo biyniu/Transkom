@@ -428,6 +428,13 @@ const MonthlySummary: React.FC = () => {
     doc.text(removeDiacritics(`Dni pracujace: ${stats.daysWorked}`), 14, finalY4 + 22);
     doc.text(removeDiacritics(`Laczny czas pracy: ${stats.workedHours}h ${stats.workedMinutes.toString().padStart(2, '0')}m`), 14, finalY4 + 28);
 
+    if (stats.avgFuelConsumption > 0) {
+        doc.text(removeDiacritics(`Srednie spalanie (Obliczone): ${stats.avgFuelConsumption.toFixed(2)} L/100km`), 14, finalY4 + 34);
+    }
+    if (stats.totalDistance > 0) {
+        doc.text(removeDiacritics(`Dystans miesieczny (Odometer): ${stats.totalDistance} km`), 14, finalY4 + 40);
+    }
+
     doc.save(`Raport_Transkom_${year}_${month}.pdf`);
   };
 

@@ -480,7 +480,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                   </div>
 
                   {(day.dailyDistance > 0 || day.dailyAvgConsumption > 0) && (
-                    <div className="flex items-center gap-4 mt-2 px-1 text-[10px] text-slate-500 font-bold uppercase tracking-widest border-t border-slate-50 pt-2 animate-fade-in">
+                    <div className="flex items-center justify-center gap-4 mt-2 px-1 text-[10px] text-slate-500 font-bold uppercase tracking-widest border-t border-slate-50 pt-2 animate-fade-in">
                       {day.dailyDistance > 0 && (
                         <div className="flex items-center gap-1">
                           <Route size={12} className="text-blue-500" />
@@ -495,6 +495,34 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                       )}
                     </div>
                   )}
+
+                  {((day.odometer || 0) > 0 || (day.avgConsumptionCalc || 0) > 0) && (() => {
+                    const sortedAll = [...days].sort((a, b) => a.date.localeCompare(b.date));
+                    const currentIdx = sortedAll.findIndex(d => d.date === day.date);
+                    const prevRefuels = sortedAll.slice(0, currentIdx).filter(d => (d.odometer || 0) > 0);
+                    const lastRefuel = prevRefuels.length > 0 ? prevRefuels[prevRefuels.length - 1] : null;
+                    const distance = lastRefuel && day.odometer && (lastRefuel.odometer || 0) > 0 ? day.odometer - (lastRefuel.odometer || 0) : null;
+
+                    return (
+                      <div className="mt-2 p-2 bg-emerald-50/30 rounded-lg border border-emerald-100/50 animate-fade-in flex flex-col items-center">
+                        <div className="text-[9px] font-black text-emerald-600/60 uppercase tracking-[0.2em] mb-1.5">Tankowanie</div>
+                        <div className="flex items-center justify-center gap-4 text-[10px] text-emerald-700 font-bold uppercase tracking-tight italic">
+                          {distance && (
+                            <div className="flex items-center gap-1.5">
+                              <Route size={11} className="text-emerald-500/70" />
+                              <span>{distance} km</span>
+                            </div>
+                          )}
+                          {(day.avgConsumptionCalc || 0) > 0 && (
+                            <div className={`flex items-center gap-1.5 ${distance ? 'border-l pl-3 border-emerald-200/40' : ''}`}>
+                              <TrendingUp size={11} className="text-emerald-500/70" />
+                              <span>{day.avgConsumptionCalc?.toFixed(2)} L/100</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Add Another Trip Button - Only show if it's CURRENT month/recent for simplicity */}
                   {isCurrentMonth && (
