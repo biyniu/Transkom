@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, Save, ArrowLeft, Clock, Search, X, Wrench, Hourglass, Thermometer, Moon, Briefcase, AlertTriangle, ChevronDown, ChevronUp, Edit, Check } from 'lucide-react';
-import { WorkDay, DayType, LocationRate, Trip, AppSettings } from '../types';
+import { Plus, Trash2, Save, ArrowLeft, Clock, Search, X, Wrench, Hourglass, Fuel, Route, Moon, Briefcase, AlertTriangle, ChevronDown, ChevronUp, Edit, Check } from 'lucide-react';
+import { WorkDay, DayType, LocationRate, Trip, AppSettings, WorkshopEntry, WaitingEntry } from '../types';
 import * as StorageService from '../services/storage';
 
 interface DayEditorProps {
@@ -15,8 +15,6 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
   const [settings, setSettings] = useState<AppSettings>(StorageService.getSettings());
   
   // Local UI states to keep inputs visible even if value is 0 during typing
-  const [showWorkshop, setShowWorkshop] = useState(false);
-  const [showWaiting, setShowWaiting] = useState(false);
   const [showExtraHourly, setShowExtraHourly] = useState(false);
   
   // State for Daily Rest Calculation
@@ -34,8 +32,10 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
     startTime: '04:00',
     endTime: '04:00',
     trips: [],
+    workshopEntries: [],
     workshopHours: 0,
     totalWorkshop: 0,
+    waitingEntries: [],
     waitingHours: 0,
     waitingNote: '',
     totalWaiting: 0,
@@ -45,7 +45,12 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
     totalBonus: 0,
     totalHourlyBonus: 0,
     totalWeight: 0,
-    note: ''
+    note: '',
+    odometer: 0,
+    fuelLiters: 0,
+    avgConsumptionComputer: 0,
+    distanceFromLastRefuel: 0,
+    avgConsumptionCalc: 0
   });
 
   useEffect(() => {
@@ -56,8 +61,6 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
       if (existingDay) {
         setDay(existingDay);
         // Initialize toggles based on existing data
-        setShowWorkshop((existingDay.workshopHours || 0) > 0);
-        setShowWaiting((existingDay.waitingHours || 0) > 0);
         setShowExtraHourly((existingDay.extraHourlyHours || 0) > 0);
         
         // Auto-expand if any extra is active
@@ -67,8 +70,6 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
       }
     } else {
         // Reset toggles for new day
-        setShowWorkshop(false);
-        setShowWaiting(false);
         setShowExtraHourly(false);
         setIsExtrasExpanded(false);
     }
@@ -78,6 +79,82 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
   useEffect(() => {
     calculateDailyRest();
   }, [day.date, day.startTime, day.type]);
+
+  useEffect(() => {
+    calculateFuelStats();
+  }, [day.odometer, day.fuelLiters]);
+
+  const calculateFuelStats = () => {
+    if (!day.odometer) return;
+
+    const allDays = StorageService.getWorkDays();
+    const otherDays = allDays.filter(d => d.id !== dayId && d.date < day.date && (d.odometer || 0) > 0);
+    const sorted = otherDays.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    const prevDayWithOdo = sorted[0];
+    
+    let distance = 0;
+    if (prevDayWithOdo && prevDayWithOdo.odometer) {
+      distance = day.odometer - prevDayWithOdo.odometer;
+    }
+
+    let avgCalc = 0;
+    if (distance > 0 && day.fuelLiters && day.fuelLiters > 0) {
+      avgCalc = (day.fuelLiters / distance) * 100;
+    }
+
+    if (day.distanceFromLastRefuel !== distance || day.avgConsumptionCalc !== avgCalc) {
+      setDay(prev => ({
+        ...prev,
+        distanceFromLastRefuel: distance,
+        avgConsumptionCalc: avgCalc
+      }));
+    }
+  };
+
+  const addWorkshopEntry = () => {
+    const newEntry: WorkshopEntry = { id: uuidv4(), description: '', hours: 1 };
+    setDay(prev => ({
+      ...prev,
+      workshopEntries: [...(prev.workshopEntries || []), newEntry]
+    }));
+  };
+
+  const updateWorkshopEntry = (id: string, field: keyof WorkshopEntry, value: string | number) => {
+    setDay(prev => ({
+      ...prev,
+      workshopEntries: (prev.workshopEntries || []).map(e => e.id === id ? { ...e, [field]: value } : e)
+    }));
+  };
+
+  const removeWorkshopEntry = (id: string) => {
+    setDay(prev => ({
+      ...prev,
+      workshopEntries: (prev.workshopEntries || []).filter(e => e.id !== id)
+    }));
+  };
+
+  const addWaitingEntry = () => {
+    const newEntry: WaitingEntry = { id: uuidv4(), description: '', hours: 1 };
+    setDay(prev => ({
+      ...prev,
+      waitingEntries: [...(prev.waitingEntries || []), newEntry]
+    }));
+  };
+
+  const updateWaitingEntry = (id: string, field: keyof WaitingEntry, value: string | number) => {
+    setDay(prev => ({
+      ...prev,
+      waitingEntries: (prev.waitingEntries || []).map(e => e.id === id ? { ...e, [field]: value } : e)
+    }));
+  };
+
+  const removeWaitingEntry = (id: string) => {
+    setDay(prev => ({
+      ...prev,
+      waitingEntries: (prev.waitingEntries || []).filter(e => e.id !== id)
+    }));
+  };
 
   const calculateDailyRest = () => {
     if (day.type !== DayType.WORK) {
@@ -228,15 +305,6 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
     // This ensures Firestore docs are named "YYYY-MM-DD"
     dayToSave.id = dayToSave.date;
 
-    if (!showWorkshop) {
-        dayToSave.workshopHours = 0;
-        dayToSave.totalWorkshop = 0;
-    }
-    if (!showWaiting) {
-        dayToSave.waitingHours = 0;
-        dayToSave.totalWaiting = 0;
-        dayToSave.waitingNote = '';
-    }
     if (!showExtraHourly) {
         dayToSave.extraHourlyHours = 0;
         dayToSave.totalExtraHourly = 0;
@@ -257,26 +325,6 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
     }
 
     onClose();
-  };
-
-  const toggleWorkshop = () => {
-    const newState = !showWorkshop;
-    setShowWorkshop(newState);
-    if (newState) {
-      setDay({ ...day, workshopHours: 1 });
-    } else {
-      setDay({ ...day, workshopHours: 0 });
-    }
-  };
-
-  const toggleWaiting = () => {
-    const newState = !showWaiting;
-    setShowWaiting(newState);
-    if (newState) {
-      setDay({ ...day, waitingHours: 1 });
-    } else {
-      setDay({ ...day, waitingHours: 0, waitingNote: '' });
-    }
   };
 
   const toggleExtraHourly = () => {
@@ -377,6 +425,36 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                         </div>
                     </div>
                 )}
+
+                <div className="grid grid-cols-2 gap-3 mt-4">
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">Dzienny przebieg (km)</label>
+                        <div className="relative">
+                            <Route size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400" />
+                            <input 
+                                type="number"
+                                value={day.dailyDistance === 0 ? '' : (day.dailyDistance || '')}
+                                onChange={e => setDay({...day, dailyDistance: parseFloat(e.target.value) || 0})}
+                                placeholder="0"
+                                className="w-full pl-9 p-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:border-blue-300 outline-none text-sm font-bold transition-all"
+                            />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">Spalanie komp. (L/100)</label>
+                        <div className="relative">
+                            <Fuel size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400" />
+                            <input 
+                                type="number"
+                                step="0.1"
+                                value={day.dailyAvgConsumption === 0 ? '' : (day.dailyAvgConsumption || '')}
+                                onChange={e => setDay({...day, dailyAvgConsumption: parseFloat(e.target.value) || 0})}
+                                placeholder="0.0"
+                                className="w-full pl-9 p-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:border-orange-300 outline-none text-sm font-bold transition-all"
+                            />
+                        </div>
+                    </div>
+                </div>
             </div>
           )}
         </section>
@@ -395,85 +473,106 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
              </button>
 
              {isExtrasExpanded && (
-                 <div className="p-4 pt-0 space-y-4 border-t border-slate-100 animate-fade-in">
-                     {/* Workshop Toggle */}
-                     <div className="mt-4">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                            <input 
-                            type="checkbox" 
-                            checked={showWorkshop}
-                            onChange={toggleWorkshop}
-                            className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
-                            />
-                            <div className="flex items-center gap-2 text-slate-700 font-medium">
-                            <Wrench size={18} className="text-slate-500" />
-                            Warsztat / Naprawa ({settings.workshopRate} zł/h)
+                 <div className="p-4 pt-0 space-y-6 border-t border-slate-100 animate-fade-in">
+                     {/* Workshop Section */}
+                     <div className="mt-4 space-y-3">
+                        <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2 text-slate-700 font-bold text-sm uppercase tracking-tight">
+                                <Wrench size={16} className="text-slate-500" />
+                                Warsztat / Naprawa
                             </div>
-                        </label>
+                            <button 
+                                onClick={addWorkshopEntry}
+                                className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-bold border border-blue-200 flex items-center gap-1 hover:bg-blue-100 transition-colors"
+                            >
+                                <Plus size={14} /> Dodaj wpis
+                            </button>
+                        </div>
                         
-                        {showWorkshop && (
-                            <div className="mt-2 pl-8 animate-fade-in">
-                                <div className="flex items-center gap-2">
+                        {(day.workshopEntries || []).map(entry => (
+                            <div key={entry.id} className="flex gap-2 items-start animate-fade-in">
+                                <div className="flex-1">
                                     <input 
-                                    type="number"
-                                    step="0.5"
-                                    value={day.workshopHours === 0 ? '' : day.workshopHours}
-                                    placeholder="0"
-                                    onChange={e => {
-                                        const val = parseFloat(e.target.value);
-                                        setDay({...day, workshopHours: isNaN(val) ? 0 : val});
-                                    }}
-                                    className="w-24 p-2 border border-slate-300 rounded-lg text-center font-bold"
+                                        type="text"
+                                        placeholder="Co było robione?"
+                                        value={entry.description}
+                                        onChange={e => updateWorkshopEntry(entry.id, 'description', e.target.value)}
+                                        className="w-full p-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:border-blue-300 outline-none transition-all"
                                     />
-                                    <span className="text-slate-500 font-medium">h = </span>
-                                    <span className="text-green-600 font-bold">{((day.workshopHours || 0) * settings.workshopRate).toFixed(2)} zł</span>
                                 </div>
+                                <div className="w-20">
+                                    <input 
+                                        type="number"
+                                        step="0.5"
+                                        value={entry.hours || ''}
+                                        placeholder="Godz"
+                                        onChange={e => updateWorkshopEntry(entry.id, 'hours', parseFloat(e.target.value) || 0)}
+                                        className="w-full p-2.5 text-sm border border-slate-200 rounded-xl text-center font-bold bg-slate-50 focus:bg-white focus:border-blue-300 outline-none transition-all"
+                                    />
+                                </div>
+                                <button 
+                                    onClick={() => removeWorkshopEntry(entry.id)}
+                                    className="p-2.5 text-red-400 hover:bg-red-50 rounded-xl transition-colors"
+                                >
+                                    <Trash2 size={18} />
+                                </button>
                             </div>
+                        ))}
+
+                        {(!day.workshopEntries || day.workshopEntries.length === 0) && (
+                            <div className="text-[10px] text-slate-400 italic pl-1">Brak wpisów warsztatowych</div>
                         )}
                      </div>
                      
                      <hr className="border-slate-100" />
 
-                     {/* Waiting Toggle */}
-                     <div>
-                        <label className="flex items-center gap-3 cursor-pointer">
-                            <input 
-                            type="checkbox" 
-                            checked={showWaiting}
-                            onChange={toggleWaiting}
-                            className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
-                            />
-                            <div className="flex items-center gap-2 text-slate-700 font-medium">
-                            <Hourglass size={18} className="text-slate-500" />
-                            Oczekiwanie na załad./rozład. ({settings.waitingRate} zł/h)
+                     {/* Waiting Section */}
+                     <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2 text-slate-700 font-bold text-sm uppercase tracking-tight">
+                                <Hourglass size={16} className="text-slate-500" />
+                                Oczekiwanie / Postój
                             </div>
-                        </label>
+                            <button 
+                                onClick={addWaitingEntry}
+                                className="text-xs bg-yellow-50 text-yellow-700 px-3 py-1.5 rounded-lg font-bold border border-yellow-200 flex items-center gap-1 hover:bg-yellow-100 transition-colors"
+                            >
+                                <Plus size={14} /> Dodaj wpis
+                            </button>
+                        </div>
                         
-                        {showWaiting && (
-                            <div className="mt-2 pl-8 space-y-2 animate-fade-in">
-                                <div className="flex items-center gap-2">
+                        {(day.waitingEntries || []).map(entry => (
+                            <div key={entry.id} className="flex gap-2 items-start animate-fade-in">
+                                <div className="flex-1">
                                     <input 
-                                    type="number"
-                                    step="0.5"
-                                    value={day.waitingHours === 0 ? '' : day.waitingHours}
-                                    placeholder="0"
-                                    onChange={e => {
-                                        const val = parseFloat(e.target.value);
-                                        setDay({...day, waitingHours: isNaN(val) ? 0 : val});
-                                    }}
-                                    className="w-24 p-2 border border-slate-300 rounded-lg text-center font-bold"
+                                        type="text"
+                                        placeholder="Gdzie / Dlaczego?"
+                                        value={entry.description}
+                                        onChange={e => updateWaitingEntry(entry.id, 'description', e.target.value)}
+                                        className="w-full p-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:border-yellow-300 outline-none transition-all"
                                     />
-                                    <span className="text-slate-500 font-medium">h = </span>
-                                    <span className="text-green-600 font-bold">{((day.waitingHours || 0) * settings.waitingRate).toFixed(2)} zł</span>
                                 </div>
-                                <input 
-                                   type="text"
-                                   placeholder="Gdzie stałem?"
-                                   value={day.waitingNote || ''}
-                                   onChange={e => setDay({...day, waitingNote: e.target.value})}
-                                   className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-gray-50"
-                                />
+                                <div className="w-20">
+                                    <input 
+                                        type="number"
+                                        step="0.5"
+                                        value={entry.hours || ''}
+                                        placeholder="Godz"
+                                        onChange={e => updateWaitingEntry(entry.id, 'hours', parseFloat(e.target.value) || 0)}
+                                        className="w-full p-2.5 text-sm border border-slate-200 rounded-xl text-center font-bold bg-slate-50 focus:bg-white focus:border-yellow-300 outline-none transition-all"
+                                    />
+                                </div>
+                                <button 
+                                    onClick={() => removeWaitingEntry(entry.id)}
+                                    className="p-2.5 text-red-400 hover:bg-red-50 rounded-xl transition-colors"
+                                >
+                                    <Trash2 size={18} />
+                                </button>
                             </div>
+                        ))}
+
+                        {(!day.waitingEntries || day.waitingEntries.length === 0) && (
+                            <div className="text-[10px] text-slate-400 italic pl-1">Brak wpisów postojowych</div>
                         )}
                      </div>
 
@@ -570,15 +669,83 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
           </div>
         )}
 
-        <div className="bg-white p-4 rounded-xl shadow-sm">
-           <label className="block text-xs font-medium text-slate-500 mb-1">Notatki / Tankowanie</label>
-           <textarea 
-             className="w-full p-2 border border-slate-300 rounded-lg bg-gray-50"
-             rows={3}
-             value={day.note}
-             onChange={e => setDay({...day, note: e.target.value})}
-             placeholder="Wpisz dodatkowe informacje..."
-           />
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-5">
+           <div className="flex items-center gap-2 mb-2">
+             <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
+               <Fuel size={18} />
+             </div>
+             <h3 className="font-bold text-slate-800">Spalanie i Licznik</h3>
+           </div>
+           
+           <div className="flex flex-col gap-4">
+             <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Stan licznika (km)</label>
+                <input 
+                  type="number"
+                  className="w-full p-3.5 border-2 border-slate-100 rounded-xl bg-slate-50 font-bold text-lg focus:border-blue-500 focus:bg-white outline-none transition-all"
+                  value={day.odometer || ''}
+                  onChange={e => setDay({...day, odometer: parseFloat(e.target.value) || 0})}
+                  placeholder="0"
+                />
+             </div>
+
+             <div className="flex gap-4">
+               <div className="flex-1">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Km od tankowania</label>
+                  <div className="w-full p-3.5 border-2 border-transparent bg-slate-100 rounded-xl font-bold text-slate-600 text-center">
+                    {day.distanceFromLastRefuel || 0} <span className="text-[10px] font-normal">km</span>
+                  </div>
+               </div>
+
+               <div className="flex-1">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Ilość litrów (L)</label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    className="w-full p-3.5 border-2 border-slate-100 rounded-xl bg-slate-50 font-bold text-blue-600 text-center focus:border-blue-500 focus:bg-white outline-none transition-all"
+                    value={day.fuelLiters || ''}
+                    onChange={e => setDay({...day, fuelLiters: parseFloat(e.target.value) || 0})}
+                    placeholder="0.00"
+                  />
+               </div>
+             </div>
+
+             <div className="flex gap-3">
+               <div className="flex-1 bg-blue-600 rounded-2xl p-4 flex flex-col justify-center items-center text-white shadow-lg shadow-blue-100">
+                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1 text-center">Średnie (Obliczone)</div>
+                  <div className="text-2xl font-black">
+                    {(day.avgConsumptionCalc || 0).toFixed(2)}
+                  </div>
+                  <div className="text-[10px] font-bold">L/100km</div>
+               </div>
+
+               <div className="flex-1 bg-slate-800 rounded-2xl p-4 flex flex-col justify-center items-center text-white shadow-lg shadow-slate-200">
+                  <div className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1 text-center">Średnie (Komputer)</div>
+                  <div className="flex items-center gap-1">
+                    <input 
+                      type="number"
+                      step="0.1"
+                      className="w-full bg-transparent text-center text-2xl font-black outline-none border-b-2 border-slate-600 focus:border-blue-400"
+                      value={day.avgConsumptionComputer || ''}
+                      onChange={e => setDay({...day, avgConsumptionComputer: parseFloat(e.target.value) || 0})}
+                      placeholder="0.0"
+                    />
+                  </div>
+                  <div className="text-[10px] font-bold mt-1">L/100km</div>
+               </div>
+             </div>
+           </div>
+
+           <div className="pt-2">
+             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 ml-1">Notatki dodatkowe</label>
+             <textarea 
+               className="w-full p-3 border-2 border-slate-100 rounded-xl bg-slate-50 text-sm focus:border-blue-500 focus:bg-white outline-none transition-all"
+               rows={2}
+               value={day.note}
+               onChange={e => setDay({...day, note: e.target.value})}
+               placeholder="Inne uwagi..."
+             />
+           </div>
         </div>
 
       </div>
@@ -592,13 +759,13 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
              <div className="flex justify-between text-sm text-slate-300">
                 <span>Godziny: {(totals.totalHourlyBonus / settings.hourlyRate).toFixed(1)} h (+ {totals.totalHourlyBonus.toFixed(2)} zł)</span>
                 <div className="text-right">
-                    {showExtraHourly && totals.totalExtraHourly > 0 ? (
+                    {totals.totalExtraHourly > 0 ? (
                         <span className="block text-blue-300 text-xs">Dodatkowe: {totals.totalExtraHourly.toFixed(2)} zł</span>
                     ) : null}
-                    {showWorkshop && totals.totalWorkshop > 0 ? (
+                    {totals.totalWorkshop > 0 ? (
                         <span className="block text-orange-300 text-xs">Warsztat: {totals.totalWorkshop.toFixed(2)} zł</span>
                     ) : null}
-                    {showWaiting && totals.totalWaiting > 0 ? (
+                    {totals.totalWaiting > 0 ? (
                         <span className="block text-yellow-300 text-xs">Oczekiwanie: {totals.totalWaiting.toFixed(2)} zł</span>
                     ) : null}
                     {totals.saturdayBonus > 0 ? (
@@ -612,7 +779,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
               <div>
                 <div className="text-slate-300 text-xs mb-0.5">Zarobek całkowity:</div>
                 <div className="text-2xl font-bold text-green-400 leading-none">
-                  {(totals.totalAmount + totals.totalBonus + (totals.totalHourlyBonus || 0) + (totals.totalWorkshop || 0) + (totals.totalWaiting || 0) + (totals.totalExtraHourly || 0) + (totals.saturdayBonus || 0)).toFixed(2)} zł
+                  {(totals.totalAmount + totals.totalBonus + (totals.totalHourlyBonus || 0) + (totals.totalExtraHourly || 0) + (totals.saturdayBonus || 0)).toFixed(2)} zł
                 </div>
               </div>
               <button 

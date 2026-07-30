@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { Truck, Clock, Calculator, Wallet, Calendar, ChevronDown, Wrench, Hourglass, FileDown, Info, Percent, Briefcase, Palmtree } from 'lucide-react';
+import { Truck, Clock, Calculator, Wallet, Calendar, ChevronDown, Wrench, Hourglass, FileDown, Info, Percent, Briefcase, Palmtree, Fuel, Route } from 'lucide-react';
 import { WorkDay, DayType } from '../types';
 import * as StorageService from '../services/storage';
 import { jsPDF } from "jspdf";
@@ -65,7 +65,9 @@ const MonthlySummary: React.FC = () => {
     vacationEarnings: 0,
     sickLeaveEarnings: 0,
     workedHours: 0,
-    workedMinutes: 0
+    workedMinutes: 0,
+    avgFuelConsumption: 0,
+    totalDistance: 0
   });
   const [locationStats, setLocationStats] = useState<LocationStat[]>([]);
   const [extraEvents, setExtraEvents] = useState<ExtraEvent[]>([]);
@@ -103,6 +105,8 @@ const MonthlySummary: React.FC = () => {
     let vacationEarnings = 0;
     let sickLeaveEarnings = 0;
     let totalMinutes = 0;
+    let totalFuelLiters = 0;
+    let totalFuelDistance = 0;
 
     const extras: ExtraEvent[] = [];
     const grouped: Record<string, LocationStat> = {};
@@ -112,6 +116,11 @@ const MonthlySummary: React.FC = () => {
       fuelBonus += day.totalBonus;
       hourlyBonus += (day.totalHourlyBonus || 0);
       
+      if (day.fuelLiters && day.fuelLiters > 0 && day.distanceFromLastRefuel && day.distanceFromLastRefuel > 0) {
+        totalFuelLiters += day.fuelLiters;
+        totalFuelDistance += day.distanceFromLastRefuel;
+      }
+
       if (day.workshopHours && day.workshopHours > 0) {
         workshopHours += day.workshopHours;
         const amount = day.totalWorkshop || 0;
@@ -203,6 +212,22 @@ const MonthlySummary: React.FC = () => {
     const workedHours = Math.floor(totalMinutes / 60);
     const workedMinutes = totalMinutes % 60;
 
+    // Calculation for monthly distance (last refuel of month - last refuel of previous month)
+    const sortedAll = [...days].sort((a, b) => a.date.localeCompare(b.date));
+    const currentMonthDateStr = selectedMonth; // YYYY-MM
+    
+    const relevantDays = sortedAll.filter(d => d.date.slice(0, 7) <= currentMonthDateStr);
+    const currentMonthRefuels = relevantDays.filter(d => d.date.slice(0, 7) === currentMonthDateStr && d.odometer && d.odometer > 0);
+    const lastRefuelCurrent = currentMonthRefuels.length > 0 ? currentMonthRefuels[currentMonthRefuels.length - 1] : null;
+    
+    const prevMonthsRefuels = relevantDays.filter(d => d.date.slice(0, 7) < currentMonthDateStr && d.odometer && d.odometer > 0);
+    const lastRefuelPrev = prevMonthsRefuels.length > 0 ? prevMonthsRefuels[prevMonthsRefuels.length - 1] : null;
+    
+    let totalMonthlyDistance = 0;
+    if (lastRefuelCurrent && lastRefuelPrev) {
+        totalMonthlyDistance = lastRefuelCurrent.odometer - lastRefuelPrev.odometer;
+    }
+
     setStats({
       baseEarnings,
       fuelBonus,
@@ -224,7 +249,9 @@ const MonthlySummary: React.FC = () => {
       vacationEarnings,
       sickLeaveEarnings,
       workedHours,
-      workedMinutes
+      workedMinutes,
+      avgFuelConsumption: totalFuelDistance > 0 ? (totalFuelLiters / totalFuelDistance) * 100 : 0,
+      totalDistance: totalMonthlyDistance
     });
 
     const groupedArray = Object.values(grouped).sort((a, b) => a.name.localeCompare(b.name));
@@ -265,6 +292,10 @@ const MonthlySummary: React.FC = () => {
       [`Warsztat (${stats.workshopHours}h)`, `${stats.workshopMoney.toFixed(2)} zl`],
       [`Postoj (${stats.waitingHours}h)`, `${stats.waitingMoney.toFixed(2)} zl`]
     );
+
+    if (stats.avgFuelConsumption > 0) {
+        summaryData.push(["Srednie Spalanie (Obliczone)", `${stats.avgFuelConsumption.toFixed(2)} L/100km`]);
+    }
 
     if (stats.saturdayBonus > 0) {
         summaryData.push(["Dodatek Sobota", `${stats.saturdayBonus.toFixed(2)} zl`]);
@@ -450,25 +481,51 @@ const MonthlySummary: React.FC = () => {
 
       {/* Podsumowanie Stawkami */}
       <div className="bg-white border-b border-slate-200 shadow-sm p-3 z-10 flex-none space-y-3">
-         <div className="grid grid-cols-2 gap-3">
+         <div className="grid grid-cols-3 gap-3">
              <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Kursy (Podstawa)</div>
                 <div className="font-bold text-slate-700 text-lg">{stats.baseEarnings.toFixed(0)} zł</div>
              </div>
+             <div className="bg-orange-50 p-2 rounded-lg border border-orange-100">
+                <div className="text-[10px] font-bold text-orange-400 uppercase tracking-wide">Premia h</div>
+                <div className="font-bold text-orange-700 text-lg">{stats.hourlyBonus.toFixed(0)} zł</div>
+             </div>
              <div className="bg-blue-50 p-2 rounded-lg border border-blue-100">
                 <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wide flex items-center gap-1">
-                    <Percent size={10}/> Premia Paliwowa (20%)
+                    <Percent size={10}/> Paliwowa (20%)
                 </div>
                 <div className="font-bold text-blue-700 text-lg">{stats.fuelBonus.toFixed(0)} zł</div>
              </div>
          </div>
 
-         <div className="grid grid-cols-4 gap-2">
-            <div className="bg-orange-50 p-2 rounded-lg border border-orange-100 text-center">
-                <div className="text-[10px] font-bold text-orange-400 uppercase tracking-wide mb-1">Premia h</div>
-                <div className="font-bold text-orange-700 text-xs">{stats.hourlyBonus.toFixed(0)} zł</div>
-            </div>
+         {(stats.avgFuelConsumption > 0 || stats.totalDistance > 0) && (
+             <div className="grid grid-cols-2 gap-3">
+                 {stats.avgFuelConsumption > 0 && (
+                     <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 flex items-center gap-3">
+                         <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                             <Fuel size={20} />
+                         </div>
+                         <div>
+                             <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest leading-none mb-1">Śr. Spalanie</div>
+                             <div className="text-xl font-black text-emerald-800 leading-none">{stats.avgFuelConsumption.toFixed(2)} <span className="text-xs font-bold text-emerald-600/60">L/100</span></div>
+                         </div>
+                     </div>
+                 )}
+                 {stats.totalDistance > 0 && (
+                     <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-center gap-3">
+                         <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                             <Route size={20} />
+                         </div>
+                         <div>
+                             <div className="text-[10px] font-bold text-blue-600 uppercase tracking-widest leading-none mb-1">Dystans Mies.</div>
+                             <div className="text-xl font-black text-blue-800 leading-none">{stats.totalDistance} <span className="text-xs font-bold text-blue-600/60">km</span></div>
+                         </div>
+                     </div>
+                 )}
+             </div>
+         )}
 
+         <div className="grid grid-cols-3 gap-2">
             <div className={`p-2 rounded-lg border text-center ${stats.extraHourlyMoney > 0 ? 'bg-indigo-50 border-indigo-100' : 'bg-slate-50 border-slate-100 opacity-50'}`}>
                 <div className={`text-[10px] font-bold uppercase tracking-wide mb-1 flex items-center justify-center gap-1 ${stats.extraHourlyMoney > 0 ? 'text-indigo-400' : 'text-slate-400'}`}>
                    <Briefcase size={10}/> Godz.

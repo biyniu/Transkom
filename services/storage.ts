@@ -303,9 +303,9 @@ export const calculateDayTotals = (day: WorkDay): WorkDay => {
      totalHourlyBonus = hours * settings.hourlyRate;
   }
 
-  const workshopHours = day.workshopHours || 0;
+  const workshopHours = (day.workshopEntries || []).reduce((acc, curr) => acc + (curr.hours || 0), 0) || day.workshopHours || 0;
   const totalWorkshop = workshopHours * settings.workshopRate;
-  const waitingHours = day.waitingHours || 0;
+  const waitingHours = (day.waitingEntries || []).reduce((acc, curr) => acc + (curr.hours || 0), 0) || day.waitingHours || 0;
   const totalWaiting = waitingHours * settings.waitingRate;
   const extraHourlyHours = day.extraHourlyHours || 0;
   const totalExtraHourly = extraHourlyHours * settings.extraHourlyRate;

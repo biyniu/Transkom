@@ -1,7 +1,7 @@
 
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { TrendingUp, Calendar, Briefcase, Truck, Wrench, Hourglass, Plus, PlusCircle, Thermometer, Palmtree, Trash2, Edit, Moon, Clock } from 'lucide-react';
+import { TrendingUp, Calendar, Briefcase, Truck, Wrench, Hourglass, Plus, PlusCircle, Route, Palmtree, Trash2, Edit, Moon, Clock, Fuel } from 'lucide-react';
 import { WorkDay, DayType } from '../types';
 import * as StorageService from '../services/storage';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Cell, LabelList } from 'recharts';
@@ -14,7 +14,7 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
   const [days, setDays] = useState<WorkDay[]>([]);
-  const [monthStats, setMonthStats] = useState({ earned: 0, tons: 0, count: 0, workedHours: 0, workedMinutes: 0 });
+  const [monthStats, setMonthStats] = useState({ earned: 0, tons: 0, count: 0, vacationDays: 0, workedHours: 0, workedMinutes: 0 });
   const [vacationStats, setVacationStats] = useState({ used: 0, remaining: 0 });
   
   // 0 = Current Month, 1 = Previous Month
@@ -38,11 +38,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
     });
 
     const earned = selectedMonthDays.reduce((acc, d) => {
-      // Sum: Trips + Fuel Bonus + Hourly Bonus + Workshop + Waiting + Extra Hourly Work
-      return acc + d.totalAmount + d.totalBonus + (d.totalHourlyBonus || 0) + (d.totalWorkshop || 0) + (d.totalWaiting || 0) + (d.totalExtraHourly || 0);
+      // Sum: Trips + Fuel Bonus + Hourly Bonus + Extra Hourly Work
+      return acc + (d.totalAmount || 0) + (d.totalBonus || 0) + (d.totalHourlyBonus || 0) + (d.totalExtraHourly || 0);
     }, 0);
 
     const tons = selectedMonthDays.reduce((acc, d) => acc + d.totalWeight, 0);
+    const vacationInMonth = selectedMonthDays.filter(d => d.type === DayType.VACATION).length;
     
     let totalMinutes = 0;
     selectedMonthDays.forEach(day => {
@@ -70,6 +71,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
       earned,
       tons,
       count: selectedMonthDays.filter(d => d.type === DayType.WORK).length,
+      vacationDays: vacationInMonth,
       workedHours,
       workedMinutes
     });
@@ -237,24 +239,38 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
           </div>
         </div>
 
-        {/* Tons Tile */}
-        <div className="bg-white rounded-2xl p-3 shadow-sm border border-slate-100">
-           <div className="flex items-center gap-2 text-slate-400 mb-1 text-[10px] uppercase tracking-wide font-bold">
-            <Truck size={12} /> Przewiezione
+        {/* Monthly Days Tile */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex flex-col justify-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+              <Briefcase size={20} />
+            </div>
+            <div>
+              <div className="text-xl font-black text-slate-800 leading-none">{monthStats.count} dni</div>
+              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Przepracowane</div>
+            </div>
           </div>
-          <div className="text-xl font-bold text-slate-700">{monthStats.tons.toFixed(0)} t</div>
-          <div className="text-[10px] text-slate-400 mt-1">{monthStats.count} dni pracy</div>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center shrink-0">
+              <Palmtree size={20} />
+            </div>
+            <div>
+              <div className="text-xl font-black text-slate-800 leading-none">{monthStats.vacationDays} dni</div>
+              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Urlop (Miesiąc)</div>
+            </div>
+          </div>
         </div>
 
-        {/* Vacation Tile - Always Annual Remaining */}
-        <div className="bg-white rounded-2xl p-3 shadow-sm border border-slate-100">
-           <div className="flex items-center gap-2 text-slate-400 mb-1 text-[10px] uppercase tracking-wide font-bold">
-            <Palmtree size={12} /> Urlop (Rok)
+        {/* Annual Vacation Tile */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex flex-col justify-between">
+           <div className="flex items-center gap-2 text-slate-400 mb-1 text-[10px] uppercase tracking-widest font-bold">
+            <Palmtree size={12} /> Urlop (Pozostało)
           </div>
-          <div className={`text-xl font-bold ${vacationStats.remaining < 5 ? 'text-orange-500' : 'text-slate-700'}`}>
-             {vacationStats.remaining} dni
+          <div className={`text-3xl font-black ${vacationStats.remaining < 5 ? 'text-orange-500' : 'text-slate-800'}`}>
+             {vacationStats.remaining}
+             <span className="text-sm font-bold text-slate-400 ml-1">dni</span>
           </div>
-          <div className="text-[10px] text-slate-400 mt-1">Pozostało w tym roku</div>
+          <div className="text-[10px] text-slate-400 mt-1 font-medium italic">Pozostało w tym roku</div>
         </div>
       </div>
 
@@ -397,7 +413,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                     {day.type === DayType.WORK ? (
                       <>
                         <div className="font-bold text-green-600">
-                          +{(day.totalAmount + day.totalBonus + (day.totalHourlyBonus || 0) + (day.totalWorkshop || 0) + (day.totalWaiting || 0) + (day.totalExtraHourly || 0) + (day.saturdayBonus || 0)).toFixed(2)} zł
+                          +{(day.totalAmount + day.totalBonus + (day.totalHourlyBonus || 0) + (day.totalExtraHourly || 0) + (day.saturdayBonus || 0)).toFixed(2)} zł
                         </div>
                         {day.saturdayBonus ? (
                           <div className="text-[10px] text-orange-600 font-bold uppercase tracking-tight">+70 zł Sobota</div>
@@ -442,18 +458,43 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                     </div>
                   )}
 
-                  <div className="mt-2 pt-2 border-t border-slate-50 text-xs text-slate-500 truncate flex flex-wrap gap-2">
-                    {day.totalExtraHourly && day.totalExtraHourly > 0 ? (
-                        <span className="flex items-center gap-1 text-indigo-500 font-semibold"><Briefcase size={12}/> Praca na godziny</span>
-                    ) : null}
-                    {day.totalWorkshop && day.totalWorkshop > 0 ? (
-                        <span className="flex items-center gap-1 text-orange-500 font-semibold"><Wrench size={12}/> Warsztat</span>
-                    ) : null}
-                    {day.totalWaiting && day.totalWaiting > 0 ? (
-                        <span className="flex items-center gap-1 text-yellow-500 font-semibold"><Hourglass size={12}/> Oczekiwanie</span>
-                    ) : null}
-                    <span>{day.trips.map(t => t.locationName).join(', ')}</span>
+                  <div className="mt-2 pt-2 border-t border-slate-50 space-y-1">
+                    <div className="flex flex-wrap gap-2 mb-1">
+                      {day.totalExtraHourly && day.totalExtraHourly > 0 ? (
+                          <span className="flex items-center gap-1 text-indigo-500 font-semibold text-[10px] uppercase"><Briefcase size={12}/> Praca na godziny</span>
+                      ) : null}
+                      {day.totalWorkshop && day.totalWorkshop > 0 ? (
+                          <span className="flex items-center gap-1 text-orange-500 font-semibold text-[10px] uppercase"><Wrench size={12}/> Warsztat</span>
+                      ) : null}
+                      {day.totalWaiting && day.totalWaiting > 0 ? (
+                          <span className="flex items-center gap-1 text-yellow-500 font-semibold text-[10px] uppercase"><Hourglass size={12}/> Oczekiwanie</span>
+                      ) : null}
+                    </div>
+                    {day.trips.map((t, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-xs text-slate-600">
+                        <div className="w-1 h-1 rounded-full bg-slate-300 flex-none" />
+                        <span className="font-medium">{t.locationName}</span>
+                        <span className="text-[10px] text-green-600 ml-auto font-bold">{(t.amount + t.bonus).toFixed(2)} zł</span>
+                      </div>
+                    ))}
                   </div>
+
+                  {(day.dailyDistance > 0 || day.dailyAvgConsumption > 0) && (
+                    <div className="flex items-center gap-4 mt-2 px-1 text-[10px] text-slate-500 font-bold uppercase tracking-widest border-t border-slate-50 pt-2 animate-fade-in">
+                      {day.dailyDistance > 0 && (
+                        <div className="flex items-center gap-1">
+                          <Route size={12} className="text-blue-500" />
+                          <span>{day.dailyDistance} km</span>
+                        </div>
+                      )}
+                      {day.dailyAvgConsumption > 0 && (
+                        <div className="flex items-center gap-1 border-l pl-3 border-slate-100">
+                          <Fuel size={12} className="text-orange-500" />
+                          <span>{day.dailyAvgConsumption.toFixed(2)} L/100</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Add Another Trip Button - Only show if it's CURRENT month/recent for simplicity */}
                   {isCurrentMonth && (
