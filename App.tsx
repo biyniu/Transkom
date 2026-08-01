@@ -1,7 +1,7 @@
 
 // Fix: Added React import to resolve missing 'React' namespace
 import React, { useState, useEffect } from 'react';
-import { Home, PlusCircle, Settings as SettingsIcon, MapPin, FileText, AlertTriangle, CloudOff, Plus } from 'lucide-react';
+import { Home, PlusCircle, Settings as SettingsIcon, MapPin, FileText, AlertTriangle, CloudOff, Plus, Truck } from 'lucide-react';
 import { format } from 'date-fns';
 import Dashboard from './components/Dashboard';
 import DayEditor from './components/DayEditor';
@@ -11,6 +11,7 @@ import Settings from './components/Settings';
 import Login from './components/Login';
 import AdminPanel from './components/AdminPanel';
 import InstallPrompt from './components/InstallPrompt';
+import Vehicle from './components/Vehicle';
 import * as StorageService from './services/storage';
 import * as ApiService from './services/api';
 import { WorkDay } from './types';
@@ -20,7 +21,8 @@ enum View {
   EDITOR = 'EDITOR',
   LOCATIONS = 'LOCATIONS',
   SUMMARY = 'SUMMARY',
-  SETTINGS = 'SETTINGS'
+  SETTINGS = 'SETTINGS',
+  VEHICLE = 'VEHICLE'
 }
 
 const App: React.FC = () => {
@@ -199,6 +201,11 @@ const App: React.FC = () => {
         {currentView === View.SUMMARY && (
           <MonthlySummary />
         )}
+        {currentView === View.VEHICLE && (
+          <div className="flex-1 overflow-hidden">
+             <Vehicle />
+          </div>
+        )}
         {currentView === View.SETTINGS && (
           <Settings onOpenAdmin={() => setShowAdmin(true)} onLogout={handleLogout} />
         )}
@@ -223,10 +230,11 @@ const App: React.FC = () => {
           </button>
 
           <button 
-             onClick={handleAddToday}
-             className="flex flex-col items-center justify-center w-14 h-14 bg-green-600 text-white rounded-full shadow-lg -mt-8 border-4 border-slate-50 z-50 active:scale-95 transition-transform"
+             onClick={() => setCurrentView(View.VEHICLE)}
+             className={`flex flex-col items-center p-2 rounded-xl transition ${currentView === View.VEHICLE ? 'text-primary bg-blue-50' : 'text-slate-400'}`}
           >
-             <Plus size={32} strokeWidth={3} />
+             <Truck size={24} />
+             <span className="text-[10px] font-medium mt-1">Pojazd</span>
           </button>
 
           <button 

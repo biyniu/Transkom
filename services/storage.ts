@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   LOCATIONS: 'kierowcapro_locations',
   DRIVERS: 'kierowcapro_drivers',
   SETTINGS: 'kierowcapro_settings',
+  DOCUMENTS: 'kierowcapro_documents',
 };
 
 const INITIAL_LOCATIONS: LocationRate[] = [
@@ -24,7 +25,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   workshopRate: 10,
   waitingRate: 8,
   totalVacationDays: 30,
-  vacationDaysLimit: 26
+  vacationDaysLimit: 26,
+  truckPlate: '',
+  trailerPlate: ''
 };
 
 export const getSettings = (): AppSettings => {
@@ -61,6 +64,21 @@ export const saveDrivers = (drivers: Driver[], sync = true) => {
   if (sync) {
     ApiService.syncDrivers(drivers);
   }
+};
+
+export const getDocuments = (): VehicleDocument[] => {
+  const data = localStorage.getItem(STORAGE_KEYS.DOCUMENTS);
+  return data ? JSON.parse(data) : [
+    { id: '1', name: 'Przegląd samochodu', expiryDate: '' },
+    { id: '2', name: 'Przegląd naczepy', expiryDate: '' },
+    { id: '3', name: 'Tachograf', expiryDate: '' },
+    { id: '4', name: 'Ubezpieczenie', expiryDate: '' },
+  ];
+};
+
+export const saveDocuments = (documents: VehicleDocument[], sync = true) => {
+  localStorage.setItem(STORAGE_KEYS.DOCUMENTS, JSON.stringify(documents));
+  // if (sync) ApiService.syncDocuments(documents); // We don't have this API yet, but we can skip it or add it later if needed
 };
 
 export const getWorkDays = (): WorkDay[] => {
@@ -348,6 +366,7 @@ export const exportData = () => {
     settings: getSettings(),
     locations: getLocations(),
     days: getWorkDays(),
+    documents: getDocuments(),
     exportDate: new Date().toISOString(),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -366,6 +385,7 @@ export const importData = async (file: File): Promise<boolean> => {
     if (data.settings) saveSettings(data.settings, true);
     if (data.locations && Array.isArray(data.locations)) saveLocations(data.locations, true);
     if (data.days && Array.isArray(data.days)) saveWorkDays(data.days, true);
+    if (data.documents && Array.isArray(data.documents)) saveDocuments(data.documents, true);
     return true;
   } catch (e) {
     console.error("Import failed", e);

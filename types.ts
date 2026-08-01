@@ -41,6 +41,8 @@ export interface AppSettings {
   
   googleScriptUrl?: string; // URL do Google Apps Script (opcjonalne w settings, bo teraz jest w kodzie)
   driverId?: string; // ID zalogowanego kierowcy
+  truckPlate?: string; // Nr rejestracyjny samochodu
+  trailerPlate?: string; // Nr rejestracyjny naczepy
 }
 
 export interface WorkshopEntry {
@@ -93,6 +95,13 @@ export interface WorkDay {
   dailyDistance?: number; // NOWE: Przejechane kilometry danego dnia
   dailyAvgConsumption?: number; // NOWE: Średnie spalanie z komputera z danego dnia
   dailyDrivingTime?: number; // NOWE: Czas jazdy (h)
+}
+
+export interface VehicleDocument {
+  id: string;
+  name: string;
+  expiryDate: string; // YYYY-MM-DD
+  note?: string;
 }
 
 export interface MonthlyStats {

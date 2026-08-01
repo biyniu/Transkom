@@ -477,10 +477,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                       ) : null}
                     </div>
                     {day.trips.map((t, idx) => (
-                      <div key={idx} className="flex items-center gap-2 text-xs text-slate-600">
+                      <div key={`trip-${idx}`} className="flex items-center gap-2 text-xs text-slate-600">
                         <div className="w-1 h-1 rounded-full bg-slate-300 flex-none" />
                         <span className="font-medium">{t.locationName}</span>
+                        <span className="text-[10px] text-slate-400 font-medium">{t.rate} zł</span>
                         <span className="text-[10px] text-green-600 ml-auto font-bold">{(t.amount + t.bonus).toFixed(2)} zł</span>
+                      </div>
+                    ))}
+                    {(day.workshopEntries || []).map((w, idx) => (
+                      <div key={`workshop-${idx}`} className="flex items-center gap-2 text-xs text-slate-600">
+                        <div className="w-1 h-1 rounded-full bg-orange-300 flex-none" />
+                        <span className="font-medium">{w.description || 'Warsztat'}</span>
+                        <span className="text-[10px] text-orange-600 ml-auto font-bold">{w.hours} h</span>
+                      </div>
+                    ))}
+                    {(day.waitingEntries || []).map((w, idx) => (
+                      <div key={`waiting-${idx}`} className="flex items-center gap-2 text-xs text-slate-600">
+                        <div className="w-1 h-1 rounded-full bg-yellow-300 flex-none" />
+                        <span className="font-medium">{w.description || 'Postój'}</span>
+                        <span className="text-[10px] text-yellow-600 ml-auto font-bold">{w.hours} h</span>
                       </div>
                     ))}
                   </div>

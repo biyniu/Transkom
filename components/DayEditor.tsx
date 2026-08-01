@@ -137,40 +137,73 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
     }
   };
 
-  const addWorkshopEntry = () => {
-    const newEntry: WorkshopEntry = { id: uuidv4(), description: '', hours: 1 };
-    setDay(prev => ({
-      ...prev,
-      workshopEntries: [...(prev.workshopEntries || []), newEntry]
-    }));
+  const [entryModal, setEntryModal] = useState<{
+    isOpen: boolean;
+    type: 'workshop' | 'waiting';
+    entry: WorkshopEntry | WaitingEntry | null;
+  }>({ isOpen: false, type: 'workshop', entry: null });
+
+  const [tempEntryDesc, setTempEntryDesc] = useState('');
+  const [tempEntryHours, setTempEntryHours] = useState('');
+
+  const openEntryModal = (type: 'workshop' | 'waiting', entry?: WorkshopEntry | WaitingEntry) => {
+    setEntryModal({
+      isOpen: true,
+      type,
+      entry: entry || { id: uuidv4(), description: '', hours: 1 }
+    });
+    if (entry) {
+      setTempEntryDesc(entry.description);
+      setTempEntryHours(entry.hours.toString());
+    } else {
+      setTempEntryDesc('');
+      setTempEntryHours('');
+    }
   };
 
-  const updateWorkshopEntry = (id: string, field: keyof WorkshopEntry, value: string | number) => {
-    setDay(prev => ({
-      ...prev,
-      workshopEntries: (prev.workshopEntries || []).map(e => e.id === id ? { ...e, [field]: value } : e)
-    }));
+  const saveEntryModal = () => {
+    if (!entryModal.entry) return;
+    
+    const savedEntry = {
+      ...entryModal.entry,
+      description: tempEntryDesc,
+      hours: parseFloat(tempEntryHours) || 0
+    };
+
+    if (entryModal.type === 'workshop') {
+      const exists = day.workshopEntries?.find(e => e.id === savedEntry.id);
+      if (exists) {
+        setDay(prev => ({
+          ...prev,
+          workshopEntries: (prev.workshopEntries || []).map(e => e.id === savedEntry.id ? savedEntry as WorkshopEntry : e)
+        }));
+      } else {
+        setDay(prev => ({
+          ...prev,
+          workshopEntries: [...(prev.workshopEntries || []), savedEntry as WorkshopEntry]
+        }));
+      }
+    } else {
+      const exists = day.waitingEntries?.find(e => e.id === savedEntry.id);
+      if (exists) {
+        setDay(prev => ({
+          ...prev,
+          waitingEntries: (prev.waitingEntries || []).map(e => e.id === savedEntry.id ? savedEntry as WaitingEntry : e)
+        }));
+      } else {
+        setDay(prev => ({
+          ...prev,
+          waitingEntries: [...(prev.waitingEntries || []), savedEntry as WaitingEntry]
+        }));
+      }
+    }
+    setEntryModal({ isOpen: false, type: 'workshop', entry: null });
   };
 
   const removeWorkshopEntry = (id: string) => {
     setDay(prev => ({
       ...prev,
       workshopEntries: (prev.workshopEntries || []).filter(e => e.id !== id)
-    }));
-  };
-
-  const addWaitingEntry = () => {
-    const newEntry: WaitingEntry = { id: uuidv4(), description: '', hours: 1 };
-    setDay(prev => ({
-      ...prev,
-      waitingEntries: [...(prev.waitingEntries || []), newEntry]
-    }));
-  };
-
-  const updateWaitingEntry = (id: string, field: keyof WaitingEntry, value: string | number) => {
-    setDay(prev => ({
-      ...prev,
-      waitingEntries: (prev.waitingEntries || []).map(e => e.id === id ? { ...e, [field]: value } : e)
     }));
   };
 
@@ -453,7 +486,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
 
                 <div className="grid grid-cols-3 gap-3 mt-4">
                     <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">Dzienny przebieg (km)</label>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">Dzienny (KM)</label>
                         <div className="relative">
                             <Route size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400" />
                             <input 
@@ -466,7 +499,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                         </div>
                     </div>
                     <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">Spalanie (L/100)</label>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">Spalanie</label>
                         <div className="relative">
                             <Fuel size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400" />
                             <input 
@@ -480,7 +513,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                         </div>
                     </div>
                     <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">Czas jazdy (h)</label>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">Czas jazdy</label>
                         <div className="relative">
                             <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-400" />
                             <div 
@@ -525,7 +558,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                                 Warsztat / Naprawa
                             </div>
                             <button 
-                                onClick={addWorkshopEntry}
+                                onClick={() => openEntryModal('workshop')}
                                 className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-bold border border-blue-200 flex items-center gap-1 hover:bg-blue-100 transition-colors"
                             >
                                 <Plus size={14} /> Dodaj wpis
@@ -533,29 +566,17 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                         </div>
                         
                         {(day.workshopEntries || []).map(entry => (
-                            <div key={entry.id} className="flex gap-2 items-start animate-fade-in">
-                                <div className="flex-1">
-                                    <input 
-                                        type="text"
-                                        placeholder="Co było robione?"
-                                        value={entry.description}
-                                        onChange={e => updateWorkshopEntry(entry.id, 'description', e.target.value)}
-                                        className="w-full p-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:border-blue-300 outline-none transition-all"
-                                    />
-                                </div>
-                                <div className="w-20">
-                                    <input 
-                                        type="number"
-                                        step="0.5"
-                                        value={entry.hours || ''}
-                                        placeholder="Godz"
-                                        onChange={e => updateWorkshopEntry(entry.id, 'hours', parseFloat(e.target.value) || 0)}
-                                        className="w-full p-2.5 text-sm border border-slate-200 rounded-xl text-center font-bold bg-slate-50 focus:bg-white focus:border-blue-300 outline-none transition-all"
-                                    />
+                            <div key={entry.id} className="flex gap-2 items-center animate-fade-in group">
+                                <div 
+                                    className="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-100 cursor-pointer hover:border-blue-300 hover:bg-white transition-all flex justify-between items-center"
+                                    onClick={() => openEntryModal('workshop', entry)}
+                                >
+                                    <span className="font-bold text-slate-700 truncate pr-2 text-sm">{entry.description || 'Brak opisu'}</span>
+                                    <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg shrink-0">{entry.hours} h</span>
                                 </div>
                                 <button 
                                     onClick={() => removeWorkshopEntry(entry.id)}
-                                    className="p-2.5 text-red-400 hover:bg-red-50 rounded-xl transition-colors"
+                                    className="p-3 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors shrink-0"
                                 >
                                     <Trash2 size={18} />
                                 </button>
@@ -577,7 +598,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                                 Oczekiwanie / Postój
                             </div>
                             <button 
-                                onClick={addWaitingEntry}
+                                onClick={() => openEntryModal('waiting')}
                                 className="text-xs bg-yellow-50 text-yellow-700 px-3 py-1.5 rounded-lg font-bold border border-yellow-200 flex items-center gap-1 hover:bg-yellow-100 transition-colors"
                             >
                                 <Plus size={14} /> Dodaj wpis
@@ -585,29 +606,17 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                         </div>
                         
                         {(day.waitingEntries || []).map(entry => (
-                            <div key={entry.id} className="flex gap-2 items-start animate-fade-in">
-                                <div className="flex-1">
-                                    <input 
-                                        type="text"
-                                        placeholder="Gdzie / Dlaczego?"
-                                        value={entry.description}
-                                        onChange={e => updateWaitingEntry(entry.id, 'description', e.target.value)}
-                                        className="w-full p-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:border-yellow-300 outline-none transition-all"
-                                    />
-                                </div>
-                                <div className="w-20">
-                                    <input 
-                                        type="number"
-                                        step="0.5"
-                                        value={entry.hours || ''}
-                                        placeholder="Godz"
-                                        onChange={e => updateWaitingEntry(entry.id, 'hours', parseFloat(e.target.value) || 0)}
-                                        className="w-full p-2.5 text-sm border border-slate-200 rounded-xl text-center font-bold bg-slate-50 focus:bg-white focus:border-yellow-300 outline-none transition-all"
-                                    />
+                            <div key={entry.id} className="flex gap-2 items-center animate-fade-in group">
+                                <div 
+                                    className="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-100 cursor-pointer hover:border-yellow-300 hover:bg-white transition-all flex justify-between items-center"
+                                    onClick={() => openEntryModal('waiting', entry)}
+                                >
+                                    <span className="font-bold text-slate-700 truncate pr-2 text-sm">{entry.description || 'Brak opisu'}</span>
+                                    <span className="text-xs font-black text-yellow-700 bg-yellow-50 px-2 py-1 rounded-lg shrink-0">{entry.hours} h</span>
                                 </div>
                                 <button 
                                     onClick={() => removeWaitingEntry(entry.id)}
-                                    className="p-2.5 text-red-400 hover:bg-red-50 rounded-xl transition-colors"
+                                    className="p-3 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors shrink-0"
                                 >
                                     <Trash2 size={18} />
                                 </button>
@@ -843,6 +852,16 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
         setHours={setTempDrivingHours}
         setMinutes={setTempDrivingMinutes}
       />
+      <ExtraEntryModal 
+        isOpen={entryModal.isOpen}
+        onClose={() => setEntryModal({ isOpen: false, type: 'workshop', entry: null })}
+        onSave={saveEntryModal}
+        type={entryModal.type}
+        desc={tempEntryDesc}
+        setDesc={setTempEntryDesc}
+        hours={tempEntryHours}
+        setHours={setTempEntryHours}
+      />
     </div>
   );
 };
@@ -1067,6 +1086,61 @@ const DrivingTimeModal: React.FC<{
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold uppercase tracking-widest rounded-xl">Anuluj</button>
           <button onClick={onSave} className="flex-1 py-3 bg-purple-600 text-white font-bold uppercase tracking-widest rounded-xl shadow-lg shadow-purple-200">Zapisz</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ExtraEntryModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: () => void;
+  type: 'workshop' | 'waiting';
+  desc: string;
+  setDesc: (val: string) => void;
+  hours: string;
+  setHours: (val: string) => void;
+}> = ({ isOpen, onClose, onSave, type, desc, setDesc, hours, setHours }) => {
+  if (!isOpen) return null;
+  const isWorkshop = type === 'workshop';
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl p-6">
+        <h3 className="font-black text-slate-800 uppercase tracking-widest text-center mb-6">
+          {isWorkshop ? 'Warsztat / Naprawa' : 'Oczekiwanie / Postój'}
+        </h3>
+        <div className="space-y-4 mb-8">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">
+              {isWorkshop ? 'Co było robione?' : 'Informacja o postoju'}
+            </label>
+            <input 
+              type="text" 
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:border-blue-300 outline-none transition-all font-bold text-slate-700"
+              placeholder={isWorkshop ? 'Wymiana oleju...' : 'Oczekiwanie na załadunek...'}
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">
+              Czas (h)
+            </label>
+            <input 
+              type="number" 
+              step="0.5"
+              value={hours}
+              onChange={(e) => setHours(e.target.value)}
+              className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:border-blue-300 outline-none transition-all font-bold text-slate-700"
+              placeholder="1.5"
+            />
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold uppercase tracking-widest rounded-xl">Anuluj</button>
+          <button onClick={onSave} className={`flex-1 py-3 text-white font-bold uppercase tracking-widest rounded-xl shadow-lg ${isWorkshop ? 'bg-blue-600 shadow-blue-200' : 'bg-yellow-500 shadow-yellow-200'}`}>Zapisz</button>
         </div>
       </div>
     </div>

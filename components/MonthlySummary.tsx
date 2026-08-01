@@ -110,6 +110,7 @@ const MonthlySummary: React.FC = () => {
 
     const extras: ExtraEvent[] = [];
     const grouped: Record<string, LocationStat> = {};
+    const settings = StorageService.getSettings();
 
     filteredDays.forEach(day => {
       baseEarnings += day.totalAmount; 
@@ -121,7 +122,21 @@ const MonthlySummary: React.FC = () => {
         totalFuelDistance += day.distanceFromLastRefuel;
       }
 
-      if (day.workshopHours && day.workshopHours > 0) {
+      if (day.workshopEntries && day.workshopEntries.length > 0) {
+        day.workshopEntries.forEach(entry => {
+            const h = entry.hours || 0;
+            const amount = h * settings.workshopRate;
+            workshopHours += h;
+            workshopMoney += amount;
+            extras.push({
+                date: day.date,
+                type: 'WARSZTAT',
+                note: entry.description || 'Naprawa / Serwis',
+                hours: h,
+                amount: amount
+            });
+        });
+      } else if (day.workshopHours && day.workshopHours > 0) {
         workshopHours += day.workshopHours;
         const amount = day.totalWorkshop || 0;
         workshopMoney += amount;
@@ -134,7 +149,21 @@ const MonthlySummary: React.FC = () => {
         });
       }
 
-      if (day.waitingHours && day.waitingHours > 0) {
+      if (day.waitingEntries && day.waitingEntries.length > 0) {
+        day.waitingEntries.forEach(entry => {
+            const h = entry.hours || 0;
+            const amount = h * settings.waitingRate;
+            waitingHours += h;
+            waitingMoney += amount;
+            extras.push({
+                date: day.date,
+                type: 'POSTÓJ',
+                note: entry.description || 'Brak opisu',
+                hours: h,
+                amount: amount
+            });
+        });
+      } else if (day.waitingHours && day.waitingHours > 0) {
         waitingHours += day.waitingHours;
         const amount = day.totalWaiting || 0;
         waitingMoney += amount;
