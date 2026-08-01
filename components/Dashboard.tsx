@@ -200,19 +200,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
       {/* Top Toggle */}
       <div className="flex items-center justify-between">
          <h2 className="text-xl font-bold text-slate-800 capitalize">{displayedMonthName}</h2>
-         <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex text-xs font-bold">
-             <button
-                onClick={() => setHistoryOffset(0)}
-                className={`px-3 py-1.5 rounded-lg transition ${historyOffset === 0 ? 'bg-blue-100 text-primary' : 'text-slate-400 hover:text-slate-600'}`}
+         <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex text-xs font-bold relative">
+             <select
+                value={historyOffset}
+                onChange={(e) => setHistoryOffset(Number(e.target.value))}
+                className="pl-3 pr-8 py-1.5 rounded-lg bg-slate-50 border-none outline-none text-slate-700 font-bold focus:ring-2 focus:ring-blue-100 appearance-none capitalize cursor-pointer h-full"
              >
-                Bieżący
-             </button>
-             <button
-                onClick={() => setHistoryOffset(1)}
-                className={`px-3 py-1.5 rounded-lg transition ${historyOffset === 1 ? 'bg-blue-100 text-primary' : 'text-slate-400 hover:text-slate-600'}`}
-             >
-                Poprzedni
-             </button>
+                {Array.from({ length: 12 }).map((_, i) => {
+                    const d = new Date();
+                    d.setMonth(d.getMonth() - i);
+                    return (
+                        <option key={i} value={i}>
+                            {format(d, 'LLLL yyyy', { locale: pl })}
+                        </option>
+                    );
+                })}
+             </select>
+             <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+             </div>
         </div>
       </div>
 
@@ -479,7 +485,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                     ))}
                   </div>
 
-                  {(day.dailyDistance > 0 || day.dailyAvgConsumption > 0) && (
+                  {(day.dailyDistance > 0 || day.dailyAvgConsumption > 0 || day.dailyDrivingTime > 0) && (
                     <div className="flex items-center justify-center gap-4 mt-2 px-1 text-[10px] text-slate-500 font-bold uppercase tracking-widest border-t border-slate-50 pt-2 animate-fade-in">
                       {day.dailyDistance > 0 && (
                         <div className="flex items-center gap-1">
@@ -488,9 +494,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onEditDay, refreshTrigger }) => {
                         </div>
                       )}
                       {day.dailyAvgConsumption > 0 && (
-                        <div className="flex items-center gap-1 border-l pl-3 border-slate-100">
+                        <div className={`flex items-center gap-1 ${day.dailyDistance > 0 ? 'border-l pl-3 border-slate-100' : ''}`}>
                           <Fuel size={12} className="text-orange-500" />
                           <span>{day.dailyAvgConsumption.toFixed(2)} L/100</span>
+                        </div>
+                      )}
+                      {day.dailyDrivingTime > 0 && (
+                        <div className={`flex items-center gap-1 ${(day.dailyDistance > 0 || day.dailyAvgConsumption > 0) ? 'border-l pl-3 border-slate-100' : ''}`}>
+                          <Clock size={12} className="text-purple-500" />
+                          <span>{Math.floor(day.dailyDrivingTime)}:{Math.round((day.dailyDrivingTime - Math.floor(day.dailyDrivingTime)) * 60).toString().padStart(2, '0')}</span>
                         </div>
                       )}
                     </div>

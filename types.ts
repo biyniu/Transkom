@@ -92,6 +92,7 @@ export interface WorkDay {
   
   dailyDistance?: number; // NOWE: Przejechane kilometry danego dnia
   dailyAvgConsumption?: number; // NOWE: Średnie spalanie z komputera z danego dnia
+  dailyDrivingTime?: number; // NOWE: Czas jazdy (h)
 }
 
 export interface MonthlyStats {

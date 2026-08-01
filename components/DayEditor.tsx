@@ -53,6 +53,31 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
     avgConsumptionCalc: 0
   });
 
+  const [showDrivingTimeModal, setShowDrivingTimeModal] = useState(false);
+  const [tempDrivingHours, setTempDrivingHours] = useState('');
+  const [tempDrivingMinutes, setTempDrivingMinutes] = useState('');
+
+  const handleOpenDrivingTimeModal = () => {
+    if (day.dailyDrivingTime) {
+      const h = Math.floor(day.dailyDrivingTime);
+      const m = Math.round((day.dailyDrivingTime - h) * 60);
+      setTempDrivingHours(h > 0 ? h.toString() : '');
+      setTempDrivingMinutes(m > 0 ? m.toString() : '');
+    } else {
+      setTempDrivingHours('');
+      setTempDrivingMinutes('');
+    }
+    setShowDrivingTimeModal(true);
+  };
+
+  const handleSaveDrivingTime = () => {
+    const h = parseInt(tempDrivingHours || '0', 10);
+    const m = parseInt(tempDrivingMinutes || '0', 10);
+    const decimalHours = parseFloat((h + m / 60).toFixed(2));
+    setDay({...day, dailyDrivingTime: decimalHours});
+    setShowDrivingTimeModal(false);
+  };
+
   useEffect(() => {
     setLocations(StorageService.getLocations());
     setSettings(StorageService.getSettings());
@@ -426,7 +451,7 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                     </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-3 mt-4">
+                <div className="grid grid-cols-3 gap-3 mt-4">
                     <div>
                         <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">Dzienny przebieg (km)</label>
                         <div className="relative">
@@ -436,12 +461,12 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                                 value={day.dailyDistance === 0 ? '' : (day.dailyDistance || '')}
                                 onChange={e => setDay({...day, dailyDistance: parseFloat(e.target.value) || 0})}
                                 placeholder="0"
-                                className="w-full pl-9 p-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:border-blue-300 outline-none text-sm font-bold transition-all"
+                                className="w-full pl-9 p-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:border-blue-300 outline-none text-sm font-bold transition-all"
                             />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">Spalanie komp. (L/100)</label>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">Spalanie (L/100)</label>
                         <div className="relative">
                             <Fuel size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400" />
                             <input 
@@ -450,8 +475,26 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
                                 value={day.dailyAvgConsumption === 0 ? '' : (day.dailyAvgConsumption || '')}
                                 onChange={e => setDay({...day, dailyAvgConsumption: parseFloat(e.target.value) || 0})}
                                 placeholder="0.0"
-                                className="w-full pl-9 p-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:border-orange-300 outline-none text-sm font-bold transition-all"
+                                className="w-full pl-9 p-2 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:border-orange-300 outline-none text-sm font-bold transition-all"
                             />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 pl-1">Czas jazdy (h)</label>
+                        <div className="relative">
+                            <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-400" />
+                            <div 
+                                onClick={handleOpenDrivingTimeModal}
+                                className="w-full pl-9 p-2 border border-slate-200 rounded-xl bg-slate-50 hover:bg-white hover:border-purple-300 outline-none text-sm font-bold transition-all cursor-pointer min-h-[38px] flex items-center"
+                            >
+                                {day.dailyDrivingTime ? (
+                                    <span>
+                                        {Math.floor(day.dailyDrivingTime)}:{Math.round((day.dailyDrivingTime - Math.floor(day.dailyDrivingTime)) * 60).toString().padStart(2, '0')}
+                                    </span>
+                                ) : (
+                                    <span className="text-slate-400 font-normal">Wpisz czas...</span>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -791,6 +834,15 @@ const DayEditor: React.FC<DayEditorProps> = ({ dayId, onClose }) => {
               </button>
            </div>
       </div>
+      <DrivingTimeModal 
+        isOpen={showDrivingTimeModal}
+        onClose={() => setShowDrivingTimeModal(false)}
+        onSave={handleSaveDrivingTime}
+        hours={tempDrivingHours}
+        minutes={tempDrivingMinutes}
+        setHours={setTempDrivingHours}
+        setMinutes={setTempDrivingMinutes}
+      />
     </div>
   );
 };
@@ -968,6 +1020,53 @@ const TripModal: React.FC<{
             <Check size={20} strokeWidth={3} />
             Zatwierdź Kurs
           </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DrivingTimeModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: () => void;
+  hours: string;
+  minutes: string;
+  setHours: (val: string) => void;
+  setMinutes: (val: string) => void;
+}> = ({ isOpen, onClose, onSave, hours, minutes, setHours, setMinutes }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl p-6">
+        <h3 className="font-black text-slate-800 uppercase tracking-widest text-center mb-6">Czas jazdy</h3>
+        <div className="flex items-center justify-center gap-4 mb-8">
+          <div className="flex flex-col items-center">
+            <input 
+              type="number" 
+              value={hours}
+              onChange={(e) => setHours(e.target.value)}
+              className="w-20 h-20 text-center text-3xl font-black bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-purple-400 focus:bg-white outline-none transition-all"
+              placeholder="0"
+            />
+            <span className="text-xs font-bold text-slate-400 mt-2 uppercase tracking-widest">Godziny</span>
+          </div>
+          <div className="text-4xl font-black text-slate-300 -mt-6">:</div>
+          <div className="flex flex-col items-center">
+            <input 
+              type="number" 
+              value={minutes}
+              onChange={(e) => setMinutes(e.target.value)}
+              className="w-20 h-20 text-center text-3xl font-black bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-purple-400 focus:bg-white outline-none transition-all"
+              placeholder="00"
+            />
+            <span className="text-xs font-bold text-slate-400 mt-2 uppercase tracking-widest">Minuty</span>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold uppercase tracking-widest rounded-xl">Anuluj</button>
+          <button onClick={onSave} className="flex-1 py-3 bg-purple-600 text-white font-bold uppercase tracking-widest rounded-xl shadow-lg shadow-purple-200">Zapisz</button>
         </div>
       </div>
     </div>
